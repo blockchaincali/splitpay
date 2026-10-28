@@ -54,3 +54,14 @@ git push -u origin main --tags
 ```
 
 `.gitignore` already excludes `.env`, keys, build output and local databases. Check `git status` shows no secrets before pushing.
+
+## v1.0.1 (documents and hosting configuration only)
+
+`v1.0.1` is `v1.0.0` plus: `vercel.json` (framework, rewrite, security headers, public contract address and deploy block), and documents (`docs/`, `README.md`). Verify that no code changed:
+
+```bash
+git diff v1.0.0 v1.0.1 --stat -- . ':!docs' ':!README.md' ':!vercel.json'    # prints nothing
+git diff v1.0.0 v1.0.1 -- contracts/SplitPayGroups.sol contracts/test        # prints nothing
+```
+
+`v1.0.0` itself is never moved or edited.

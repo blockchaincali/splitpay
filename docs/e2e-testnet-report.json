@@ -1,14 +1,14 @@
 {
   "network": "Arc Testnet",
   "contract": "0xd7f9c3823e81fe27300693c060a6418ad3eed806",
-  "groupId": "0x4102ed068cf9d83a6b4fb515af3fdc7e184d8cd55ef71b6a357e2ac6c0c7dcd8",
+  "groupId": "0x8a38c3043258646947edfc85c27503398416bffbd7e5ee286ea024a7fab675cf",
   "transactions": {
-    "createGroup": "0x06de5a3e935306138889b2b72b9c91f8c26f1d2efc8507430336c1e61346f224",
-    "approve exact 0.25": "0x9b4f957d7700398094ac67118397b1d012cc7f4792003ac66986ec67d6e3f999",
-    "contribute 0.25": "0x2c5e8a669b05aad288817b79a5d4a9d8b7685acae9c0a6134925ac5c086f0ec2",
-    "approve exact 0.75": "0x0797062aee03fea2584472c5b6c788244b64fa7f81a5eec63997c1c7bac924e6",
-    "contribute 0.75 (fills the goal)": "0xe6a1021fd8dcb12c83c228df7d3343f57cbb2e0c672716594215f0ee7861e28d",
-    "createGroup (12s deadline)": "0xb4f1481dc16830fe48266072eb09f64174a19ed10b80955e53a22bfb14078a3c"
+    "createGroup": "0x7d2d197b04bccc44d7a2344fdb3936c07e54851ebb2bb0f58c03bd3b17573a12",
+    "approve exact 0.25": "0x23f623ad7cb758e766d2097c4671a280febbdfb592105af3066184971db27ba2",
+    "contribute 0.25": "0x38cd6c40b86904cf1417ceba76116164f668048b6f1b905c4d35c1717b396f2c",
+    "approve exact 0.75": "0x6268841a416f28183858308400281791e0ec0fb205b267d58d4e36ee8a81f9ed",
+    "contribute 0.75 (fills the goal)": "0xa7548def58da5507f5d812e8d65cc24c9b901cfe1f3b16de334841e9413d65f9",
+    "createGroup (12s deadline)": "0xad289c2aa61c13a80687ce1b3df2f364beafbb7fea81b0af4b2ec62a297dfb22"
   },
   "passed": 31,
   "failed": 0,
@@ -32,7 +32,7 @@
     {
       "name": "createGroup: tx mined with status success",
       "ok": true,
-      "detail": "0x06de5a3e935306138889b2b72b9c91f8c26f1d2efc8507430336c1e61346f224"
+      "detail": "0x7d2d197b04bccc44d7a2344fdb3936c07e54851ebb2bb0f58c03bd3b17573a12"
     },
     {
       "name": "GroupCreated emitted with derived id",
@@ -66,7 +66,7 @@
     {
       "name": "approve exact 0.25: tx mined with status success",
       "ok": true,
-      "detail": "0x9b4f957d7700398094ac67118397b1d012cc7f4792003ac66986ec67d6e3f999"
+      "detail": "0x23f623ad7cb758e766d2097c4671a280febbdfb592105af3066184971db27ba2"
     },
     {
       "name": "allowance is exactly 0.25 USDC",
@@ -80,7 +80,7 @@
     {
       "name": "contribute 0.25: tx mined with status success",
       "ok": true,
-      "detail": "0x2c5e8a669b05aad288817b79a5d4a9d8b7685acae9c0a6134925ac5c086f0ec2"
+      "detail": "0x38cd6c40b86904cf1417ceba76116164f668048b6f1b905c4d35c1717b396f2c"
     },
     {
       "name": "ContributionReceived has amount, running total and nickname",
@@ -105,7 +105,7 @@
     {
       "name": "approve exact 0.75: tx mined with status success",
       "ok": true,
-      "detail": "0x0797062aee03fea2584472c5b6c788244b64fa7f81a5eec63997c1c7bac924e6"
+      "detail": "0x6268841a416f28183858308400281791e0ec0fb205b267d58d4e36ee8a81f9ed"
     },
     {
       "name": "overpayment (0.80 > 0.75 left) reverts",
@@ -120,7 +120,7 @@
     {
       "name": "contribute 0.75 (fills the goal): tx mined with status success",
       "ok": true,
-      "detail": "0xe6a1021fd8dcb12c83c228df7d3343f57cbb2e0c672716594215f0ee7861e28d"
+      "detail": "0xa7548def58da5507f5d812e8d65cc24c9b901cfe1f3b16de334841e9413d65f9"
     },
     {
       "name": "group is exactly fully collected",
@@ -134,7 +134,7 @@
     {
       "name": "createGroup (12s deadline): tx mined with status success",
       "ok": true,
-      "detail": "0xb4f1481dc16830fe48266072eb09f64174a19ed10b80955e53a22bfb14078a3c"
+      "detail": "0xad289c2aa61c13a80687ce1b3df2f364beafbb7fea81b0af4b2ec62a297dfb22"
     },
     {
       "name": "payment after the deadline reverts",

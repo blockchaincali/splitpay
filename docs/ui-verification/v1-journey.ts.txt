@@ -1,0 +1,127 @@
+import { chromium, type Page } from 'playwright-core'
+import { erc20Abi } from 'viem'
+import { installWallet, pub } from './wallet'
+
+const keys = JSON.parse(await Bun.file('/tmp/e2e/keys.json').text())
+const BASE = 'http://localhost:5173'
+const USDC = '0x3600000000000000000000000000000000000000'
+const results: string[] = []
+const errors: string[] = []
+const ok = (name: string, pass: boolean, extra = '') => { results.push(`${pass ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); console.log(results.at(-1)) }
+const watch = (p: Page, tag: string) => {
+  p.on('pageerror', (e) => errors.push(`${tag} pageerror: ${e.message.slice(0, 200)}`))
+  p.on('console', (m) => { if (m.type() === 'error') errors.push(`${tag} console.error: ${m.text().slice(0, 200)}`) })
+}
+const shot = (p: Page, n: string) => p.screenshot({ path: `/tmp/shots/${n}.png`, fullPage: true })
+
+const browser = await chromium.launch()
+const mk = async (key: string | null, w: number, h: number) => {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2 })
+  if (key) await installWallet(ctx, key as `0x${string}`, [])
+  return ctx
+}
+
+// ---- organiser, desktop: home + create
+const orgCtx = await mk(keys.organiser, 1280, 800)
+const org = await orgCtx.newPage(); watch(org, 'org')
+await org.goto(BASE + '/', { waitUntil: 'networkidle' })
+ok('home renders heading', await org.getByRole('heading', { name: /Split shared costs/ }).isVisible())
+await shot(org, 'home-desktop')
+await org.goto(BASE + '/new', { waitUntil: 'networkidle' })
+await org.getByRole('button', { name: /Wallet 0x.* connected/ }).first().waitFor({ timeout: 15000 })
+ok('wallet connected through injected provider', true)
+await shot(org, 'new-desktop-empty')
+await org.getByLabel('What is it for?').fill('Weekend cabin (UI test)')
+await org.getByLabel('Details (optional)').fill('Three nights by the lake. Pay your share by the deadline.')
+await org.getByLabel('Total to collect (USDC)').fill('1.00')
+await org.getByLabel(/Who receives the money/).fill(await (async () => (await import('viem/accounts')).privateKeyToAccount(keys.recipient).address)())
+await org.getByLabel(/I have checked/).check()
+await org.getByRole('radio', { name: 'Custom amounts' }).click()
+await shot(org, 'new-desktop-custom')
+await org.getByRole('radio', { name: 'Split equally' }).click()
+await shot(org, 'new-desktop-filled')
+await org.getByRole('button', { name: 'Create group' }).click()
+await org.getByText('Your group is live').waitFor({ timeout: 120000 })
+ok('group created and confirmed by the network', true)
+const link = await org.getByRole('textbox', { name: 'Share link' }).inputValue()
+ok('share link generated', /\/g\/0x[0-9a-f]{64}\?d=.+&b=\d+/.test(link), link.slice(0, 90) + '…')
+await shot(org, 'created-desktop')
+
+// ---- unconnected visitor, mobile
+const anonCtx = await mk(null, 390, 844)
+const anon = await anonCtx.newPage(); watch(anon, 'anon')
+await anon.goto(link, { waitUntil: 'networkidle' })
+await anon.getByText('Details verified').waitFor({ timeout: 30000 })
+ok('anonymous visitor sees verified details + connect prompt', await anon.getByRole('button', { name: /Connect wallet to pay/ }).isVisible())
+ok('title from link shown', await anon.getByRole('heading', { name: 'Weekend cabin (UI test)' }).isVisible())
+await shot(anon, 'group-anon-mobile')
+
+// ---- payer, mobile: pay
+const payCtx = await mk(keys.payer, 390, 844)
+const pay = await payCtx.newPage(); watch(pay, 'payer')
+await pay.goto(link, { waitUntil: 'networkidle' })
+await pay.getByText('Details verified').waitFor({ timeout: 30000 })
+const amt = pay.getByLabel('Amount (USDC)')
+await amt.waitFor()
+ok('equal share (0.25) is prefilled', (await amt.inputValue()) === '0.25')
+await amt.fill('5.00')
+ok('overpayment is blocked with a clear message', await pay.getByText(/Only 1\.00 USDC is still needed/).isVisible() && await pay.getByRole('button', { name: /^Pay/ }).isDisabled())
+await amt.fill('0.25')
+const big = 'x'.repeat(30)
+await pay.getByLabel('Nickname (optional)').fill(big)
+ok('nickname input refuses more than 24 bytes', (await pay.getByLabel('Nickname (optional)').inputValue()).length <= 24)
+await pay.getByLabel('Nickname (optional)').fill('Test 😀')
+ok('public nickname warning visible', await pay.getByText('Nicknames are public', { exact: true }).isVisible())
+await shot(pay, 'group-payer-mobile-before')
+const before = await pub.readContract({ address: USDC, abi: erc20Abi, functionName: 'balanceOf', args: [(await import('viem/accounts')).privateKeyToAccount(keys.recipient).address] })
+await pay.getByRole('button', { name: /^Pay 0\.25 USDC/ }).click()
+await pay.getByText('Payment confirmed').waitFor({ timeout: 150000 })
+ok('payment confirmed only after network confirmation', true)
+await shot(pay, 'group-payer-mobile-confirmed')
+const after = await pub.readContract({ address: USDC, abi: erc20Abi, functionName: 'balanceOf', args: [(await import('viem/accounts')).privateKeyToAccount(keys.recipient).address] })
+ok('recipient wallet received exactly 0.25 USDC', after - before === 250000n)
+await pay.getByText('25%').first().waitFor({ timeout: 40000 })
+ok('progress updates to 25%', true)
+await pay.getByText('Test 😀').first().waitFor({ timeout: 40000 })
+ok('receipt list shows the nickname + explorer link', await pay.locator('a[href*="explorer.testnet.arc.io/tx/"]').first().isVisible())
+await shot(pay, 'group-payer-mobile-after')
+
+// ---- tampered link
+const tampered = link.replace(/d=([^&]+)/, (_m, d) => `d=${d.slice(0, -3)}AAA`)
+const tp = await anonCtx.newPage(); watch(tp, 'tamper')
+await tp.goto(tampered, { waitUntil: 'networkidle' })
+await tp.getByText(/do not match the network record|not in this link/).first().waitFor({ timeout: 30000 })
+ok('tampered link is flagged', true)
+await shot(tp, 'group-tampered-mobile')
+
+// ---- recipient cannot pay own group
+const recCtx = await mk(keys.recipient, 390, 844)
+const rec = await recCtx.newPage(); watch(rec, 'recipient')
+await rec.goto(link, { waitUntil: 'networkidle' })
+await rec.getByText(/cannot pay into its own group/).waitFor({ timeout: 30000 })
+ok('recipient wallet is blocked from paying itself', true)
+
+// ---- organiser dashboard
+await org.goto(BASE + '/dashboard', { waitUntil: 'networkidle' })
+await org.getByRole('heading', { name: 'Weekend cabin (UI test)' }).waitFor({ timeout: 90000 })
+ok('dashboard lists the new group', true)
+await org.getByText(/0\.25.*of.*1\.00 USDC/).first().waitFor({ timeout: 30000 })
+ok('dashboard shows 0.25 of 1.00 USDC collected', true)
+await shot(org, 'dashboard-desktop')
+await org.setViewportSize({ width: 390, height: 844 }); await shot(org, 'dashboard-mobile')
+
+const mob = await mk(keys.organiser, 390, 844)
+const mp = await mob.newPage(); watch(mp, 'mobile-new')
+await mp.goto(BASE + '/new', { waitUntil: 'networkidle' })
+await mp.getByRole('radio', { name: 'Custom amounts' }).click()
+await mp.getByLabel('Person 1').fill('Amina')
+await shot(mp, 'new-mobile-custom')
+const overflow = await mp.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)
+ok('no horizontal overflow on mobile create form', !overflow)
+await mp.goto(link, { waitUntil: 'networkidle' })
+await mp.getByText('Details verified').waitFor({ timeout: 30000 })
+ok('no horizontal overflow on mobile group page', !(await mp.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)))
+console.log('\nconsole/page errors:', errors.length ? '\n' + errors.join('\n') : 'none')
+await Bun.write('/tmp/shots/live-results.txt', results.join('\n') + '\n\nerrors:\n' + errors.join('\n'))
+await browser.close()
+process.exit(results.some((r) => r.startsWith('FAIL')) ? 1 : 0)

@@ -1,0 +1,157 @@
+import { chromium, type Page } from 'playwright-core'
+import { privateKeyToAccount } from 'viem/accounts'
+import { installWallet } from './wallet'
+
+const keys = JSON.parse(await Bun.file('/tmp/e2e/keys.json').text())
+const BASE = 'http://localhost:5173'
+const T = Date.now()
+import { Database } from 'bun:sqlite'
+// Reuse the organiser account from the first run: a wallet can only be linked to one account.
+const orgEmail = (new Database('/home/user/app/server/data/splitpay.db', { readonly: true }).query("SELECT email FROM users WHERE email LIKE 'org%' ORDER BY id LIMIT 1").get() as { email: string }).email
+const aminaEmail = (new Database('/home/user/app/server/data/splitpay.db', { readonly: true }).query("SELECT email FROM users WHERE email LIKE 'amina%' ORDER BY id LIMIT 1").get() as { email: string } | null)?.email ?? `amina${T}@example.test`
+const bolaEmail = `bola${T}@example.test`
+const results: string[] = []
+const errors: string[] = []
+const ok = (name: string, pass: boolean, extra = '') => { results.push(`${pass ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); console.log(results.at(-1)) }
+const shot = (p: Page, n: string) => p.screenshot({ path: `/tmp/shots/v2-${n}.png`, fullPage: true })
+const watch = (p: Page, tag: string) => {
+  p.on('pageerror', (e) => errors.push(`${tag} pageerror: ${e.message.slice(0, 200)}`))
+  p.on('console', (m) => { if (m.type() === 'error' && !/429/.test(m.text())) errors.push(`${tag} console.error: ${m.text().slice(0, 200)}`) })
+}
+async function emailSignIn(page: Page, email: string, next: string) {
+  await page.goto(`${BASE}/signin?next=${encodeURIComponent(next)}`, { waitUntil: 'networkidle' })
+  await page.getByLabel('Email address').fill(email)
+  await page.getByRole('button', { name: 'Email me a code' }).click()
+  await page.getByText('Development mode: no email is sent').waitFor()
+  await page.getByRole('button', { name: 'Use it' }).click()
+  await page.getByRole('button', { name: 'Verify and continue' }).click()
+}
+const approve = async (page: Page, title: string) => {
+  const d = page.getByRole('dialog', { name: title })
+  await d.waitFor({ timeout: 30000 })
+  await d.getByRole('button', { name: 'Approve' }).click()
+}
+
+const browser = await chromium.launch()
+const recipient = privateKeyToAccount(keys.recipient).address
+
+// ---------- organiser (desktop, funded key wallet) ----------
+const orgCtx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 })
+await installWallet(orgCtx, keys.organiser, [])
+const org = await orgCtx.newPage(); watch(org, 'org')
+await emailSignIn(org, orgEmail, '/new')
+await org.getByRole('heading', { name: 'What is this for?' }).or(org.getByLabel('What is it for?')).first().waitFor()
+ok('email sign-in works through the real UI and returns to the page', true)
+await org.getByLabel('What is it for?').fill('Beach house (v2 test)')
+await org.getByLabel('Details (optional)').fill('Shared deposit for the weekend.')
+await org.getByLabel('Total to collect (USDC)').fill('1.00')
+await org.getByLabel(/Who receives the money/).fill(recipient)
+await org.getByLabel(/I have checked/).check()
+await org.getByRole('button', { name: 'Create group' }).click()
+await org.getByText('Your group is live').waitFor({ timeout: 120000 })
+const groupLink = await org.getByRole('textbox', { name: 'Share link' }).inputValue()
+ok('group created onchain with the signed-in organiser', true)
+await org.getByRole('button', { name: 'Invite people and set reminders' }).click()
+const linkBtn = org.getByRole('button', { name: /Link .* to my account|Link this wallet to my account/ }).first()
+if (await linkBtn.isVisible({ timeout: 4000 }).catch(() => false)) await linkBtn.click()
+await org.getByRole('button', { name: 'Save this group' }).click({ timeout: 60000 })
+await org.getByRole('heading', { name: 'Beach house (v2 test)' }).waitFor({ timeout: 30000 })
+ok('wallet ownership proven by signature, group saved after Arc check', true)
+const invite = async (name: string, email: string) => {
+  await org.getByLabel('Name', { exact: true }).fill(name)
+  await org.getByLabel('Email (optional)').fill(email)
+  await org.getByLabel('Their share (USDC)').fill('0.25')
+  await org.getByRole('button', { name: 'Create invitation' }).click()
+  await org.getByRole('textbox', { name: 'Invitation link' }).waitFor()
+  return org.getByRole('textbox', { name: 'Invitation link' }).inputValue()
+}
+const aminaInvite = await invite('Amina', aminaEmail)
+await invite('Bola', bolaEmail)
+ok('invitations created (links shown once)', /\/join\/[A-Za-z0-9_-]{40,}/.test(aminaInvite))
+await shot(org, 'manage-invited')
+
+// ---------- participant (mobile, embedded SplitPay wallet, new email) ----------
+const payCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, storageState: '/tmp/e2e/embedded-state.json' })
+const pay = await payCtx.newPage(); watch(pay, 'participant')
+const joinPath = new URL(aminaInvite).pathname
+await pay.goto(BASE + joinPath, { waitUntil: 'networkidle' })
+await pay.getByRole('heading', { name: 'Beach house (v2 test)' }).waitFor()
+ok('invite page shows the group and the invitee share', await pay.getByText('0.25 USDC').first().isVisible())
+await shot(pay, 'join-start')
+await pay.getByRole('button', { name: 'Sign in with email' }).click()
+await pay.getByLabel('Email address').fill(aminaEmail)
+await pay.getByRole('button', { name: 'Email me a code' }).click()
+await pay.getByRole('button', { name: 'Use it' }).click()
+await pay.getByRole('button', { name: 'Verify and continue' }).click()
+await pay.getByRole('button', { name: 'Connect a wallet' }).click()
+await pay.getByRole('button', { name: /Unlock my SplitPay testnet wallet/ }).click()
+await pay.getByLabel('6-digit PIN').fill('123456')
+await pay.getByRole('button', { name: 'Unlock', exact: true }).click()
+await pay.getByRole('button', { name: /Link this wallet|Join and go to payment/ }).first().waitFor({ timeout: 30000 })
+ok('SplitPay testnet wallet unlocks with the PIN and connects (no MetaMask)', true)
+if (await pay.getByRole('button', { name: 'Link this wallet' }).isVisible()) {
+  await pay.getByRole('button', { name: 'Link this wallet' }).click()
+  await approve(pay, 'Sign a message')
+}
+await pay.getByRole('button', { name: 'Join and go to payment' }).waitFor({ timeout: 30000 })
+await pay.getByRole('button', { name: 'Join and go to payment' }).click()
+await pay.getByText('Details verified').waitFor({ timeout: 30000 })
+ok('invitee joined and landed on the verified group page', true)
+
+// NGN sandbox must never count as paid
+await pay.getByRole('radio', { name: /NGN bank transfer/ }).click()
+await pay.getByRole('button', { name: 'Get an NGN quote' }).click()
+await pay.getByText('Your quote').waitFor()
+ok('NGN quote shows demo rate, fee and recipient amount', (await pay.getByText('Sandbox demo rate').count()) > 0 && (await pay.getByText('Provider fee').count()) > 0)
+await shot(pay, 'ngn-quote')
+await pay.getByRole('button', { name: 'Create sandbox payment request' }).click()
+await pay.getByText('Do not send real money to these details').waitFor()
+await pay.getByRole('button', { name: 'Simulate: transfer received' }).click()
+await pay.getByRole('button', { name: 'Simulate: completed' }).click()
+await pay.getByText('This did not pay the group').waitFor()
+ok('NGN sandbox completes but is labelled as not paying the group', true)
+ok('group progress is unchanged after the sandbox payment', (await pay.getByText('0%').count()) > 0)
+await shot(pay, 'ngn-complete')
+
+// real USDC payment with the embedded wallet
+await pay.getByRole('radio', { name: /^USDC/ }).click()
+await pay.getByLabel('Nickname (optional)').fill('Amina')
+await pay.getByRole('button', { name: /^Pay 0\.25 USDC/ }).click()
+await approve(pay, 'Allow a payment')
+await approve(pay, 'Send your payment')
+await pay.getByText('Payment confirmed').waitFor({ timeout: 150000 })
+ok('USDC payment confirmed onchain through the embedded wallet (exact allowance, then payment)', true)
+await shot(pay, 'paid')
+await pay.getByText('25%').first().waitFor({ timeout: 60000 })
+ok('progress now 25% from Arc', true)
+
+// ---------- organiser sees onchain status, sends reminders ----------
+await org.reload({ waitUntil: 'networkidle' })
+await org.getByText('Paid on Arc').waitFor({ timeout: 60000 })
+ok('organiser sees Amina as Paid on Arc (derived from the chain)', true)
+await org.getByRole('button', { name: 'Remind everyone unpaid' }).click()
+await org.getByText('Reminder sent').waitFor()
+ok('reminder sent only to the unpaid person', (await org.getByText('Already paid').count()) >= 1)
+await org.getByRole('button', { name: 'Remind everyone unpaid' }).click()
+await org.getByText('Reminded in the last 24 hours').waitFor()
+ok('second reminder within 24 hours is blocked', true)
+await org.getByText('NGN sandbox requests').waitFor()
+ok('organiser sees sandbox requests labelled as not counted', (await org.getByText('none of this is counted').count()) > 0)
+await shot(org, 'manage-after')
+
+// ---------- second device: persistent account ----------
+const devCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
+const dev = await devCtx.newPage(); watch(dev, 'second-device')
+await emailSignIn(dev, orgEmail, '/dashboard')
+await dev.getByText('Saved to your account').waitFor({ timeout: 30000 })
+ok('groups follow the account to a second device', await dev.getByText('Beach house (v2 test)').first().isVisible())
+await shot(dev, 'dashboard-account')
+await dev.goto(BASE + '/account', { waitUntil: 'networkidle' })
+await dev.getByText('What is live and what is a demo').waitFor()
+await shot(dev, 'account')
+await dev.goto(BASE + '/signin', { waitUntil: 'networkidle' })
+
+console.log('\nconsole/page errors:', errors.length ? '\n' + errors.join('\n') : 'none')
+await Bun.write('/tmp/shots/v2-results.txt', results.join('\n') + '\n\nerrors:\n' + errors.join('\n') + `\n\ngroup: ${groupLink}\n`)
+await browser.close()
+process.exit(results.some((r) => r.startsWith('FAIL')) ? 1 : 0)
