@@ -1,0 +1,23 @@
+# dependencies and build output
+node_modules/
+dist/
+exports/
+
+# secrets and local environment (never commit)
+.env
+.env.*
+!.env.example
+.circle/
+recovery_file*
+*.keystore
+
+# generated / local-only
+traces.jsonl
+console.jsonl
+contracts/out/
+contracts/cache/
+cache/
+server/data/
+*.db
+*.db-wal
+*.db-shm
