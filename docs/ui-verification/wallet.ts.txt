@@ -1,0 +1,57 @@
+import { createPublicClient, createWalletClient, http, type Hex } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+import { arcTestnet } from 'viem/chains'
+import type { BrowserContext } from 'playwright-core'
+
+const rpc = 'https://rpc.testnet.arc.io'
+export const pub = createPublicClient({ chain: arcTestnet, transport: http(rpc) })
+
+/** Installs a throwaway-key EIP-1193 wallet into every page of the context. Testnet only. */
+export async function installWallet(ctx: BrowserContext, key: Hex, log: string[]) {
+  const account = privateKeyToAccount(key)
+  const wallet = createWalletClient({ account, chain: arcTestnet, transport: http(rpc) })
+  await ctx.exposeFunction('__rpc', async (method: string, params: unknown[]) => {
+    switch (method) {
+      case 'eth_requestAccounts':
+      case 'eth_accounts':
+        return [account.address]
+      case 'eth_chainId':
+        return '0x4cef52'
+      case 'net_version':
+        return '5042002'
+      case 'wallet_switchEthereumChain':
+      case 'wallet_revokePermissions':
+        return null
+      case 'wallet_getPermissions':
+      case 'wallet_requestPermissions':
+        return [{ parentCapability: 'eth_accounts' }]
+      case 'personal_sign':
+        return account.signMessage({ message: { raw: params[0] as Hex } })
+      case 'eth_sendTransaction': {
+        const tx = (params[0] ?? {}) as { to?: Hex; data?: Hex; value?: Hex }
+        log.push(`wallet signs tx to ${tx.to}`)
+        return wallet.sendTransaction({ to: tx.to, data: tx.data, value: tx.value ? BigInt(tx.value) : undefined })
+      }
+      default:
+        return pub.request({ method: method as never, params: params as never })
+    }
+  })
+  await ctx.addInitScript(`
+    (() => {
+      const listeners = {};
+      const provider = {
+        isMetaMask: true,
+        request: ({ method, params }) => window.__rpc(method, params || []),
+        on: (e, f) => { (listeners[e] ||= []).push(f); return provider; },
+        removeListener: (e, f) => { listeners[e] = (listeners[e] || []).filter((x) => x !== f); return provider; },
+        enable: () => window.__rpc('eth_requestAccounts', []),
+      };
+      window.ethereum = provider;
+      const info = { uuid: 'mock-wallet', name: 'Test Wallet', icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIvPg==', rdns: 'io.mock.wallet' };
+      const announce = () => window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail: Object.freeze({ info, provider }) }));
+      window.addEventListener('eip6963:requestProvider', announce);
+      announce();
+    })();
+  `)
+  return account
+}

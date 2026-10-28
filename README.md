@@ -1,5 +1,7 @@
 # SplitPay
 
+> Branch `consumer-v2`. The frozen Arc Microgrants release is tag `v1.0.0` (see `docs/RELEASE.md`). The deployed contract is the same in both.
+
 SplitPay helps friends, roommates and organisers collect shared expenses in USDC. Create a payment group, share one link (for example in WhatsApp), and watch contributions arrive. Payments go straight from each contributor to the receiving wallet: SplitPay never holds the money.
 
 Built with [Arc Studio](https://studio.arc.io)
@@ -26,6 +28,17 @@ Built with [Arc Studio](https://studio.arc.io)
 - Organiser dashboard listing your groups and what each has collected.
 - Optional public nickname with each payment (24 bytes at most, visible onchain to everyone).
 
+### New on `consumer-v2`
+
+- Sign in with an email code. Groups, invitations and people follow your account to any device.
+- Link a wallet to your account by signing a message (free, no transaction).
+- SplitPay testnet wallet: try it with no browser extension. Testnet only, protected by a PIN.
+- Invite people by link or email, see who has paid (read from Arc), and send reminders (at most one a day per person).
+- Choose how to pay: USDC on Arc (live), or an NGN bank transfer shown as a sandbox demo with a quote, fees and status steps. The NGN demo moves no money and never counts toward a group's total.
+- The Account page lists what is live, what is a demo, and what still needs setup.
+
+See `docs/V2_ARCHITECTURE.md`, `docs/INTEGRATIONS_RESEARCH.md`, `docs/GRANT_APPLICATION.md` and `docs/TEST_EVIDENCE.md`.
+
 A payment is only shown as complete after the network has confirmed it.
 
 ## Tech stack
@@ -41,16 +54,21 @@ Prerequisites: [Bun](https://bun.sh) and [Foundry](https://book.getfoundry.sh).
 
 ```bash
 bun install
-bun run dev
+bun run dev        # the app on port 5173 (proxies /api to the server)
+bun run server     # the API on port 3001, in a second terminal
 ```
+
+For a single-process production run: `bun run build && bun run start` (or use the `Dockerfile`, which serves the app and API together on port 7860 and keeps its database in `/data`). The v2 server needs a host that runs a process and keeps a volume; static-only hosts work only for the frozen v1 release.
 
 ### Environment variables
 
-Public values only. Never put private keys in `.env`.
+Frontend values are public only. Never put private keys in `VITE_` variables. Server values go in the host's secret store; `.env.example` lists all of them.
 
 - `VITE_SPLITPAY_ADDRESS`: deployed `SplitPayGroups` contract address.
 - `VITE_SPLITPAY_DEPLOY_BLOCK`: block the contract was deployed in (where history scans start).
 - `VITE_SPLITPAY_CHAIN_ID`: optional. Leave unset for Arc Testnet. `5042` switches the app to Arc mainnet (real USDC); read `docs/MAINNET_CHECKLIST.md` first.
+
+Server (all optional in development): `APP_ENV`, `PORT` or `SERVER_PORT`, `DATABASE_PATH`, `SERVER_SECRET`, `APP_BASE_URL`, `MAIL_PROVIDER`, `RESEND_API_KEY`, `MAIL_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `YELLOWCARD_API_KEY`, `YELLOWCARD_SECRET_KEY`, `YELLOWCARD_BASE_URL`, `SANDBOX_NGN_PER_USDC`, `SANDBOX_PROVIDER_FEE_BPS`. In development, sign-in codes appear in the app instead of being emailed. In production the server refuses to send mail until a provider is configured. The sandbox NGN rate is a demo number, not market data.
 
 ### Scripts
 
@@ -58,6 +76,9 @@ Public values only. Never put private keys in `.env`.
 bun run contracts:build   # compile contracts
 bun run contracts:test    # Foundry tests
 bun run test:lib          # split and share-link tests
+bun run test:server       # API server tests
+bun run server            # start the API server
+bun run start             # production mode (serves dist and /api)
 bun run e2e:testnet       # live Arc Testnet checks with throwaway wallets (see the script header)
 bun run check             # lint and typecheck
 bun run build             # production build

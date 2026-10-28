@@ -107,3 +107,12 @@ M0 to M4 are built in this branch (M4 in sandbox). M5 to M8 are blocked on crede
 - Provider adapters: contract tests with recorded-shape fixtures; request-signing test vectors.
 - Frontend: library tests plus browser runs against the real app on Arc Testnet with throwaway wallets.
 - Unchanged: 70 contract tests, 10 library tests, 31-check live run from v1 must still pass on this branch.
+
+## Implementation status (28 October 2026)
+
+M0 to M4 are implemented on this branch and verified (see `docs/TEST_EVIDENCE.md`). Differences from the plan above:
+- Email codes appear in an in-app development outbox until a mail provider is configured. In production mode the server refuses to send mail instead.
+- Group pages stay at `/g/<id>`; people management is at `/g/<id>/manage`; invitations are at `/join/<token>`.
+- A wallet can be linked to one account only. This is deliberate: it stops one person claiming another's wallet.
+- The server also serves the built app in production (`bun run start`, `Dockerfile`), so one container is the whole deployment.
+- Known scaling gap: history reads from the public RPC are chunked because wide ranges are rejected. A server-side indexer is part of M8.

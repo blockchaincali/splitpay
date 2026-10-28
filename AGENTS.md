@@ -50,3 +50,13 @@ bun run contracts:test
 ```
 
 If the contract changes: `forge build`, regenerate `src/lib/splitpayAbi.ts` from `contracts/out/SplitPayGroups.sol/SplitPayGroups.json`, redeploy, update `.env`.
+
+## consumer-v2 (branch)
+
+- Frozen release: tag `v1.0.0` on `main`. Never edit `contracts/SplitPayGroups.sol` or redeploy it from this branch (`git diff v1.0.0 -- contracts/SplitPayGroups.sol contracts/test` must stay empty).
+- API server in `server/` (Bun, SQLite in WAL mode, one process owns the file). Dev: `bun run server` on 3001, Vite proxies `/api`. Never delete and rebuild `server/data/*.db` to "fix" an integrity error: stop and tell the user.
+- Truth rule: only Arc decides whether someone paid. Sandbox NGN intents are always `settledOnArc: false` and `countsTowardCollected: false`. Do not change that without a real provider integration and legal sign-off.
+- Honest labels: every integration is `live`, `sandbox`, `needs-credentials` or `planned` (`server/payments.ts`, shown on the Account page). Do not describe sandbox flows as live.
+- SplitPay testnet wallet (`src/wallet/embedded.ts`) is testnet only and disabled on mainnet. Do not market it as production custody.
+- Secrets: provider keys live in server environment variables only. Never ask for them in chat, never put them in `VITE_` variables.
+- Docs: `docs/V2_ARCHITECTURE.md`, `docs/INTEGRATIONS_RESEARCH.md`, `docs/GRANT_APPLICATION.md`, `docs/TEST_EVIDENCE.md`.
