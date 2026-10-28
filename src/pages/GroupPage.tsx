@@ -98,6 +98,9 @@ export function GroupPage({ id }: { id: string }) {
         <div className="grid gap-5">
           <PayPanel groupId={groupId!} group={group} meta={meta} onPaid={onPaid} />
           {isCreator ? (
+            <button type="button" className="btn-ghost" onClick={() => navigate(`/g/${groupId}/manage${window.location.search}`)}>People and reminders</button>
+          ) : null}
+          {isCreator ? (
             <ShareLinkCard path={groupPath(groupId!, decoded && verify === 'verified' ? decoded.text : undefined, hint ?? undefined)} title={meta?.t ?? 'Payment group'} />
           ) : null}
         </div>

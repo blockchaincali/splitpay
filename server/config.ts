@@ -18,7 +18,7 @@ function rpcUrl(): string {
 }
 
 export const config = {
-  port: Number(env.SERVER_PORT ?? 3001),
+  port: Number(env.SERVER_PORT ?? env.PORT ?? 3001),
   dbPath: env.DATABASE_PATH ?? 'server/data/splitpay.db',
   chainId,
   explorerBase: chain.explorerBase,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useReadContract } from 'wagmi'
-import { ConnectKitButton } from 'connectkit'
+import { openConnectChooser } from '@/wallet/walletUi'
 import { erc20Abi, type Address, type Hex } from 'viem'
 import { CheckCircle2 } from 'lucide-react'
 import { parseUsdc } from '@/onchain-money'
@@ -12,6 +12,7 @@ import { fmtUsdc, fmtUsdcLabel, utf8Bytes } from '@/lib/money'
 import { usePayShare } from '@/lib/usePayShare'
 import { useNow } from '@/lib/time'
 import { Notice, Spinner, TxLink } from './ui'
+import { NgnPanel } from './NgnPanel'
 import { StatusSteps } from './StatusSteps'
 
 const MAX_NAME_BYTES = 24
@@ -56,6 +57,7 @@ export function PayPanel({ groupId, group, meta, onPaid }: Props) {
   const [name, setName] = useState('')
   const [picked, setPicked] = useState<number | null>(null)
   const prefilled = useRef(false)
+  const [method, setMethod] = useState<'usdc' | 'ngn'>('usdc')
 
   // Pre-fill once with the first option (never more than what is still needed).
   useEffect(() => {
@@ -132,9 +134,34 @@ export function PayPanel({ groupId, group, meta, onPaid }: Props) {
           className="mt-4 grid gap-4"
           onSubmit={(e) => {
             e.preventDefault()
-            if (amount !== null && !problem && nameBytes <= MAX_NAME_BYTES) void pay(amount, name.trim())
+            if (method === 'usdc' && amount !== null && !problem && nameBytes <= MAX_NAME_BYTES) void pay(amount, name.trim())
           }}
         >
+          <fieldset>
+            <legend className="label">How do you want to pay?</legend>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Payment method">
+              {(
+                [
+                  { id: 'usdc', title: 'USDC', sub: 'Live on Arc' },
+                  { id: 'ngn', title: 'NGN bank transfer', sub: 'Sandbox demo' },
+                ] as const
+              ).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={method === m.id}
+                  disabled={busy}
+                  onClick={() => setMethod(m.id)}
+                  className="min-h-[56px] rounded-2xl border px-3 text-left"
+                  style={{ borderColor: method === m.id ? 'var(--teal)' : 'var(--border)', background: method === m.id ? 'var(--teal-soft)' : '#fff' }}
+                >
+                  <span className="block font-semibold">{m.title}</span>
+                  <span className="block text-xs" style={{ color: 'var(--muted)' }}>{m.sub}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
           {options.length > 1 || (meta?.m === 'custom' && options.length > 0) ? (
             <fieldset>
               <legend className="label">Who are you?</legend>
@@ -238,12 +265,10 @@ export function PayPanel({ groupId, group, meta, onPaid }: Props) {
           ) : null}
           {error ? <Notice tone={step === 'failed' ? 'danger' : 'muted'}>{error}</Notice> : null}
 
-          {!isConnected ? (
-            <ConnectKitButton.Custom>
-              {({ show }) => (
-                <button type="button" className="btn-primary" onClick={show}>Connect wallet to pay</button>
-              )}
-            </ConnectKitButton.Custom>
+          {method === 'ngn' ? (
+            <NgnPanel groupId={groupId} amount={amount} />
+          ) : !isConnected ? (
+            <button type="button" className="btn-primary" onClick={openConnectChooser}>Connect wallet to pay</button>
           ) : (
             <button type="submit" className="btn-primary" disabled={busy || amount === null || Boolean(problem) || nameBytes > MAX_NAME_BYTES}>
               {busy ? (
@@ -255,12 +280,14 @@ export function PayPanel({ groupId, group, meta, onPaid }: Props) {
               )}
             </button>
           )}
-          {isConnected && chainId !== TARGET_CHAIN_ID ? (
+          {method === 'usdc' && isConnected && chainId !== TARGET_CHAIN_ID ? (
             <p className="hint">Your wallet will ask to switch to {TARGET_CHAIN.name} first.</p>
           ) : null}
-          <p className="hint">
-            You allow exactly this amount (never unlimited). It goes directly to the receiving wallet: SplitPay never holds your money.
-          </p>
+          {method === 'usdc' ? (
+            <p className="hint">
+              You allow exactly this amount (never unlimited). It goes directly to the receiving wallet: SplitPay never holds your money.
+            </p>
+          ) : null}
         </form>
       )}
     </section>

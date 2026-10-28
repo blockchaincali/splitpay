@@ -1,0 +1,37 @@
+{
+  "measuredAt": "2026-10-28T14:39:46.772Z",
+  "network": "Arc Testnet (5042002)",
+  "note": "Native fee unit on Arc is USDC with 18 decimals; value shown in USDC.",
+  "transactions": {
+    "createGroup": {
+      "gasUsed": "140010",
+      "gasPriceWei": "22996731548",
+      "feeUsdc": "0.00321977238403548"
+    },
+    "approve exact 0.25": {
+      "gasUsed": "55438",
+      "gasPriceWei": "22996731548",
+      "feeUsdc": "0.001274892803558024"
+    },
+    "contribute 0.25": {
+      "gasUsed": "138518",
+      "gasPriceWei": "22996731548",
+      "feeUsdc": "0.003185461260565864"
+    },
+    "approve exact 0.75": {
+      "gasUsed": "55438",
+      "gasPriceWei": "22996731548",
+      "feeUsdc": "0.001274892803558024"
+    },
+    "contribute 0.75 (fills the goal)": {
+      "gasUsed": "78796",
+      "gasPriceWei": "22996731548",
+      "feeUsdc": "0.001812050459056208"
+    },
+    "createGroup (12s deadline)": {
+      "gasUsed": "140022",
+      "gasPriceWei": "22996731548",
+      "feeUsdc": "0.003220048344814056"
+    }
+  }
+}

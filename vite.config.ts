@@ -37,5 +37,13 @@ export default defineConfig({
   server: {
     allowedHosts: true,
     cors: true,
+    proxy: {
+      // The browser only reaches Vite; the API server listens on 3001 (see server/index.ts).
+      '/api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
   },
 })

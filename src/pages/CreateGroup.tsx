@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { ConnectKitButton } from 'connectkit'
+import { openConnectChooser } from '@/wallet/walletUi'
 import { isAddress } from 'viem'
 import { CheckCircle2 } from 'lucide-react'
 import { parseUsdc } from '@/onchain-money'
@@ -98,6 +98,11 @@ export function CreateGroup() {
           <div className="mt-2"><TxLink hash={result.txHash}>View creation receipt</TxLink></div>
         </section>
         <ShareLinkCard path={groupPath(result.groupId, result.text, result.blockNumber)} title={title.trim()} />
+        <div className="card-inner grid gap-2">
+          <p className="font-semibold">Want invitations and reminders?</p>
+          <p className="hint">Save this group to your SplitPay account to invite people by email and remind anyone who has not paid. This is optional. Payments work without an account.</p>
+          <button type="button" className="btn-ghost" onClick={() => navigate(groupPath(result.groupId, result.text, result.blockNumber).replace('?', '/manage?'))}>Invite people and set reminders</button>
+        </div>
         <div className="grid gap-2 sm:grid-cols-2">
           <button type="button" className="btn-primary" onClick={() => navigate(groupPath(result.groupId, result.text, result.blockNumber))}>Open group page</button>
           <button type="button" className="btn-ghost" onClick={() => navigate('/dashboard')}>Go to my groups</button>
@@ -189,9 +194,7 @@ export function CreateGroup() {
       {error ? <Notice tone={step === 'failed' ? 'danger' : 'muted'}>{error}</Notice> : null}
 
       {!isConnected ? (
-        <ConnectKitButton.Custom>
-          {({ show: open }) => <button type="button" className="btn-primary" onClick={open}>Connect wallet to continue</button>}
-        </ConnectKitButton.Custom>
+        <button type="button" className="btn-primary" onClick={openConnectChooser}>Connect wallet to continue</button>
       ) : (
         <button type="submit" className="btn-primary" disabled={busy || (touched && !canSubmit)}>
           {busy ? <><Spinner /> Creating…</> : 'Create group'}

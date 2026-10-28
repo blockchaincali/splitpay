@@ -77,7 +77,7 @@ const SANDBOX_TRANSITIONS: Record<string, string[]> = {
 }
 
 export function registerPayments(r: Router) {
-  r.add('GET', '/integrations/status', (c) => ({ integrations: integrationStatuses(config.devMail) }))
+  r.add('GET', '/integrations/status', () => ({ integrations: integrationStatuses(config.devMail) }))
 
   r.add('POST', '/quotes', async (c) => {
     requireUser(c)

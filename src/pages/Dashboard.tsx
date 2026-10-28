@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAccount, usePublicClient, useReadContracts } from 'wagmi'
-import { ConnectKitButton } from 'connectkit'
+import { openConnectChooser } from '@/wallet/walletUi'
 import type { PublicClient } from 'viem'
 import { Plus } from 'lucide-react'
 import { splitPayAbi } from '@/lib/splitpayAbi'
@@ -13,6 +13,9 @@ import { navigate } from '@/lib/router'
 import { timeLeft, useNow } from '@/lib/time'
 import { Chip, CopyButton, Notice, Spinner } from '@/components/ui'
 import { buildShareLink } from '@/lib/share'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/api/client'
+import { useSession } from '@/account/SessionProvider'
 
 export function Dashboard() {
   const { address, isConnected } = useAccount()
@@ -95,12 +98,13 @@ export function Dashboard() {
 
   if (!isConnected)
     return (
-      <div className="card mx-auto max-w-md text-center">
-        <h1 className="display text-2xl font-bold">Your groups</h1>
-        <p className="mt-2" style={{ color: 'var(--ink-2)' }}>Connect the wallet you used to create groups to see them here.</p>
-        <ConnectKitButton.Custom>
-          {({ show }) => <button type="button" className="btn-primary mt-4" onClick={show}>Connect wallet</button>}
-        </ConnectKitButton.Custom>
+      <div className="grid gap-6">
+        <ServerGroups />
+        <div className="card mx-auto max-w-md text-center">
+          <h1 className="display text-2xl font-bold">Your groups</h1>
+          <p className="mt-2" style={{ color: 'var(--ink-2)' }}>Connect the wallet you used to create groups to see them here.</p>
+          <button type="button" className="btn-primary mt-4" onClick={openConnectChooser}>Connect wallet</button>
+        </div>
       </div>
     )
 
@@ -119,6 +123,7 @@ export function Dashboard() {
       </div>
 
       {scanError ? <Notice tone="warn">{scanError}</Notice> : null}
+      <ServerGroups />
 
       <dl className="grid grid-cols-3 gap-3">
         {[
@@ -206,9 +211,57 @@ function GroupRow({ row, now }: { row: Row; now: number }) {
       )}
       <div className="mt-auto flex items-center gap-2">
         <button type="button" className="btn-primary btn-sm flex-1" onClick={() => navigate(path)}>View payments</button>
+        <button type="button" className="btn-ghost btn-sm" onClick={() => navigate(`/g/${row.ref.groupId}/manage${path.slice(path.indexOf('?'))}`)}>People</button>
         {link ? <CopyButton text={link} label={`Copy share link for ${row.title}`} className="border" /> : null}
       </div>
       {!row.text ? <p className="hint">Details for this group were saved on another device. The link still works and shows the amounts from the network.</p> : null}
     </li>
+  )
+}
+
+interface ServerGroupsRes {
+  owned: { groupId: string; title: string; path: string; participantCount: number }[]
+  joined: { groupId: string; title: string; path: string; expectedAmount: string; status: string }[]
+}
+
+/** Groups saved to the signed-in account. Available on any device after signing in. */
+function ServerGroups() {
+  const { user } = useSession()
+  const q = useQuery({ queryKey: ['server-groups'], queryFn: () => api.get<ServerGroupsRes>('/groups'), enabled: Boolean(user), retry: 1 })
+  if (!user) {
+    return (
+      <Notice tone="teal" title="Keep your groups on every device">
+        <button type="button" className="underline" onClick={() => navigate('/signin?next=/dashboard')}>Sign in</button> to save groups, invite people and send reminders. Your payments still settle on Arc.
+      </Notice>
+    )
+  }
+  if (!q.data || (q.data.owned.length === 0 && q.data.joined.length === 0)) return null
+  return (
+    <section className="card grid gap-3" aria-labelledby="saved">
+      <h2 id="saved" className="display text-xl font-bold">Saved to your account</h2>
+      <ul className="grid gap-2 md:grid-cols-2">
+        {q.data.owned.map((g) => (
+          <li key={g.groupId} className="card-inner flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{g.title}</p>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>{g.participantCount} {g.participantCount === 1 ? 'person' : 'people'} invited</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" className="btn-ghost btn-sm" onClick={() => navigate(g.path)}>Open</button>
+              <button type="button" className="btn-primary btn-sm" onClick={() => navigate(`/g/${g.groupId}/manage${g.path.slice(g.path.indexOf('?'))}`)}>People</button>
+            </div>
+          </li>
+        ))}
+        {q.data.joined.map((g) => (
+          <li key={`j-${g.groupId}`} className="card-inner flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{g.title}</p>
+              <p className="text-sm tabular-nums" style={{ color: 'var(--muted)' }}>Your share {fmtUsdc(BigInt(g.expectedAmount))} USDC</p>
+            </div>
+            <button type="button" className="btn-primary btn-sm" onClick={() => navigate(g.path)}>Pay</button>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

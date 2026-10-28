@@ -9,6 +9,7 @@ import { arc, arcTestnet } from 'viem/chains'
 import { injected } from 'wagmi/connectors'
 import { requireChain } from '@/onchain-facts'
 import { registerChain } from './tracing'
+import './wallet/embedded' // announces the SplitPay testnet wallet (EIP-6963) before wagmi looks for wallets
 
 // RPC URLs come from the generated chain facts, never from memory.
 const testnetRpc = requireChain(arcTestnet.id).rpcUrls[0]

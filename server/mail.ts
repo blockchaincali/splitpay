@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite'
 import { config } from './config'
-import { now } from './util'
+import { HttpError, now } from './util'
 
 export interface Mail {
   to: string
@@ -38,7 +38,14 @@ export function resendMailer(apiKey: string, from: string): Mailer {
   }
 }
 
+/** Mail never silently disappears: in production with no provider configured, sending fails loudly. */
 export function pickMailer(db: Database): Mailer {
-  if (config.resendApiKey && !config.devMail) return resendMailer(config.resendApiKey, config.mailFrom)
-  return devMailer(db)
+  if (config.devMail) return devMailer(db)
+  if (config.resendApiKey) return resendMailer(config.resendApiKey, config.mailFrom)
+  return {
+    kind: 'resend',
+    async send() {
+      throw new HttpError(503, 'mail_not_configured', 'Email is not set up on this server yet, so codes and invitations cannot be sent.')
+    },
+  }
 }
