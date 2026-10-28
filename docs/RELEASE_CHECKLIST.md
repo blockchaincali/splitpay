@@ -23,7 +23,7 @@ Prepared 28 October 2026. Legend: **Done** = finished and verified here. **You**
 
 | Step | State |
 |------|-------|
-| `v1.0.0` tag exists and is untouched | Done (`git rev-parse v1.0.0` = `271817c`) |
+| `v1.0.0` tag exists and is untouched | Done (`git rev-parse v1.0.0^{commit}` = `5181d67`) |
 | `v1.0.1` = v1.0.0 plus hosting config and documents only | Done (verify: `git diff v1.0.0 v1.0.1 --stat` shows only `docs/`, `README.md`, `vercel.json`) |
 | `consumer-v2` separate branch, never merged into `main` | Done |
 | Contract and tests identical across all refs | Done (`git diff v1.0.0 consumer-v2 -- contracts/SplitPayGroups.sol contracts/test` is empty) |
