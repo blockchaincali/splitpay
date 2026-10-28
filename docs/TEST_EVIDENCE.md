@@ -63,3 +63,18 @@ The only browser console error in the run is an expected 404 when the organiser 
 - Anything against Yellow Card or Circle services (no credentials).
 - The wallet-picker modal of third-party wallets (the stand-in wallet connects automatically).
 - Load or scale testing, and SQLite behaviour across many users.
+
+## Release-readiness checks (added 28 October 2026)
+
+| Check | Result |
+|-------|--------|
+| `v1.0.1` (v1.0.0 plus hosting config and documents) production build from a clean checkout with only the two public contract variables | Succeeds; contract address present in the bundle |
+| Local production preview of that build: `/` and a `/g/<id>` deep link | Both return the app |
+| Guest-payment journey on the v1 release build | All 19 payment, verification and dashboard checks passed. The guest made no API calls (there is no server in v1) |
+| The same journey on `consumer-v2` | The same 19 checks passed. The guest made exactly one API call, `GET /api/auth/me` (the session check), no writes, and saw no sign-in screen |
+| Layout at 360, 390, 768 and 1280 px wide for `/`, `/new`, `/dashboard` on the v1 release build | 12 of 12 without horizontal overflow; no page errors |
+| Mainnet-configured build (`VITE_SPLITPAY_CHAIN_ID=5042`, **placeholder** address, local only, never deployed) | Shows the real-USDC banner, no testnet wording, no page errors |
+
+The guest-journey script ended with a timeout at its last step on both runs because it used an outdated field label for the custom-amount form; that step is a script defect, not an app defect (the screen was verified at four widths separately, above). The script has been corrected in `docs/ui-verification/`.
+
+Browser runs used a stand-in wallet with throwaway testnet keys. They did not exercise a real browser-extension wallet.

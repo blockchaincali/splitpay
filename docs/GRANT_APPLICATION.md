@@ -1,137 +1,185 @@
 # SplitPay: Circle Developer Grants application pack
 
-Prepared 28 October 2026. This document separates what works from what is a demonstration. Where something is not live, it says so.
+Prepared 28 October 2026. Every capability below carries exactly one of four status labels. If a claim is not backed by evidence in this repository, it is not labelled "verified".
 
-Repository state: tag `v1.0.0` (frozen Arc Microgrants MVP) and branch `consumer-v2` (this work). The deployed contract is the same in both.
+Repository: tag `v1.0.0` (frozen Arc Microgrants MVP) and branch `consumer-v2`. The deployed contract is identical in both and has not changed since deployment.
 
-## 1. What SplitPay is
+## 1. Summary
 
-SplitPay lets friends, roommates and organisers collect shared expenses in USDC without chasing anyone. The organiser creates a group with a goal, a deadline and a receiving wallet, shares a link, and contributors pay their share directly to the recipient on Arc. Payment status comes from the chain, not from a database.
+SplitPay lets friends, roommates and organisers collect shared expenses in USDC without chasing anyone. The organiser creates a group (goal, deadline, receiving wallet), shares a link, and contributors pay their share directly to the recipient on Arc. Whether someone has paid is read from the chain, never from a database. The contract holds no funds and has no admin.
 
-## 2. Architecture
+Programme fit (from Circle's published description of what it looks for): Arc is the settlement layer; USDC is the unit of account; the use case is peer-to-peer payments. Circle wallets are the planned embedded-wallet building block, not yet integrated.
+
+Traction: none beyond internal testing. There are no external users, pilots or revenue. We state this so reviewers can weigh the milestones accordingly.
+
+Applicant and team details, the grant amount requested and public profiles are for the applicant to complete (marked **[applicant]** in `docs/submission/ARC_MICROGRANTS_SUBMISSION.md`). They are not invented here.
+
+## 2. Status key
+
+| Label | Meaning |
+|-------|---------|
+| **Verified on testnet** | Works against real Arc Testnet state. Evidence is in this repository and can be re-run. No real money. |
+| **Sandbox demonstration** | Runs end to end inside SplitPay with simulated or demo data. Labelled as a demo in the app. No money moves and it never changes a group's total. |
+| **Unavailable (production integration)** | Not connected to the real service. Needs credentials, an agreement or approval we do not have. May exist as code written to published documentation, never run against the live service. |
+| **Future milestone** | Not built. Planned, with the gate that must be met first. |
+
+Nothing in this pack is labelled "live in production". There is no production deployment.
+
+## 3. Status matrix
+
+### Verified on testnet
+
+| Capability | Evidence |
+|------------|----------|
+| `SplitPayGroups` contract: immutable recipient, target, deadline; exact-amount pull; direct-to-recipient transfer; no custody | 70 Foundry tests incl. fuzz and invariants; deployed `0xd7f9c3823e81fe27300693c060a6418ad3eed806` on Arc Testnet |
+| Security fixes from review (id front-running, recipient self-payment) | `docs/SECURITY_REVIEW.md`; tests added for both |
+| Create group, share link (copy, WhatsApp, native share, QR), verified details | Browser run on testnet, `docs/TEST_EVIDENCE.md` |
+| Equal and custom splits in 6-decimal USDC units | 10 library tests; browser run |
+| Guest payment from an external wallet with no account | Browser journey `docs/ui-verification/v1-journey.ts.txt`; guest made no API writes |
+| Exact-amount approval then payment; "confirmed" shown only after onchain confirmation | Browser run; 31 of 31 live contract-level checks, hashes in `docs/e2e-testnet-report.json` |
+| Receipts with transaction hashes and explorer links; organiser dashboard | Browser run |
+| Group fully funded by four contributors on testnet | Transaction hashes in the testnet record |
+| Email sign-in (one-time code, hashed, expiring, attempt-limited), sessions | 38 API tests; browser run (code delivered through an in-app development outbox, not real email) |
+| Wallet linking by signature; one wallet per account | API tests; browser run |
+| Group index verified against Arc before saving; groups follow the account across devices | API tests; browser run (second device) |
+| Invitations (single-use link or email), participant status derived from Arc, reminders (skip paid, once per 24 hours) | API tests; browser run |
+| SplitPay testnet wallet (in-browser, PIN-encrypted, testnet only) lets a new user pay with no extension | Browser run, 17 of 17 checks on two runs |
+
+### Sandbox demonstration
+
+| Capability | What is simulated | Guardrail |
+|------------|-------------------|-----------|
+| NGN quote (rate, provider fee, you would pay, group receives) | Demo rate and fee from configuration | Banner on every screen; rate is not market data |
+| NGN payment request and status timeline | Provider behaviour; the organiser simulates "received" and "completed" | `settledOnArc: false` and `countsTowardCollected: false` are enforced by the server and tested |
+| Mock bank details | Entire instruction block | Labelled "sandbox, do not send money" |
+
+### Unavailable (production integration)
+
+| Integration | State | Blocker |
+|-------------|-------|---------|
+| Yellow Card collections and payouts | Request signing and webhook verification written to their published format and unit tested. **No call made to Yellow Card.** | Sandbox credentials, then KYB, IP allow-listing and a commercial agreement. Arc support as a settlement network unconfirmed |
+| Circle user-controlled or passkey wallets | Not integrated | Circle Console configuration (App ID or client key tied to the deployed hostname) |
+| Real email delivery | Adapter for a transactional provider written, never run | Provider account and a verified sending domain |
+| Google sign-in | Flow written, disabled | OAuth client credentials |
+| Circle onramp | Not integrated | Console key; availability for Nigerian users unconfirmed |
+| Mainnet deployment | None | Owner's wallet, independent audit decision, explicit approval (see `docs/MAINNET_CHECKLIST.md`) |
+
+### Future milestones
+
+See section 7.
+
+## 4. Architecture
+
+Summary below; full design for production in `docs/PRODUCTION_ARCHITECTURE.md`; current implementation in `docs/V2_ARCHITECTURE.md`.
 
 ```
 Browser (React, mobile-first)
-  |-- wallets: browser extension wallets | SplitPay testnet wallet (in-browser) | Circle passkey wallet (planned)
-  |-- reads and writes Arc directly --> SplitPayGroups contract --> USDC (ERC-20, 6 decimals)
-  '-- /api --> API server (Bun) --> SQLite today, Postgres for production
-                |- email sign-in, sessions
-                |- wallet linking by signature
-                |- group index (verified against Arc before saving)
-                |- invitations, participants, reminders
-                '- NGN sandbox quotes and payment requests (no money moves)
+  |-- guest path: any EVM wallet --> Arc directly (no account, no server on the payment path)
+  |-- optional: SplitPay testnet wallet (testnet only) | Circle wallets (planned)
+  '-- optional: /api --> API server --> SQLite today (Postgres for production)
+                |- email sign-in, sessions, wallet linking
+                |- group index, invitations, reminders
+                '- NGN sandbox (no money moves)
+Arc: SplitPayGroups --> USDC (ERC-20, 6 decimals; gas is also paid in USDC)
 ```
 
-Design rules:
-- Arc USDC is the settlement layer. A payment counts only when `ContributionReceived` is on Arc.
-- The server is an index and a notifier. It never decides whether someone has paid.
-- Money never passes through SplitPay: the contract pulls the exact approved amount and sends it straight to the recipient. The contract holds nothing.
-- Every integration is labelled `live`, `sandbox`, `needs setup` or `planned`, in the app and in `docs/V2_ARCHITECTURE.md`.
+Design rules that are enforced in code and tests:
 
-Smart contract (`SplitPayGroups`, unchanged since v1):
-- Immutable recipient, target, deadline per group. IDs are derived from the creator, which stops front-running.
-- Exact-amount allowance and transfer through OpenZeppelin SafeERC20, with a reentrancy guard.
-- Rejects overpayment, expired groups, self-payment by the recipient and nicknames over 24 UTF-8 bytes.
-- No owner, no admin, no fees, no upgrade path.
-- Arc detail handled: the USDC ERC-20 view has 6 decimals while the gas balance has 18. The app and contract only use the 6-decimal view.
+1. A USDC payment counts only when `ContributionReceived` exists on Arc.
+2. The server indexes and notifies; it never decides whether someone paid.
+3. Money does not pass through SplitPay. The contract pulls the exact approved amount and sends it to the recipient.
+4. Guest payment never requires an account (`docs/PRODUCTION_ARCHITECTURE.md` section 11).
+5. Sandbox results are stored and shown separately from verified payments.
+6. Arc detail: the USDC ERC-20 view has 6 decimals and the native gas view has 18. The app and contract use only the 6-decimal view for money.
 
-## 3. Completed features
+## 5. Test evidence
 
-Live on Arc Testnet:
-- Create a group, share a link (copy, WhatsApp, native share, QR), equal or custom splits, verified group details.
-- Pay in USDC with an exact allowance and see confirmation, progress and receipts with explorer links.
-- Organiser dashboard.
-- Email sign-in with one-time codes, sessions, and groups that follow the account across devices.
-- Wallet linking by signature (proves ownership, no transaction).
-- Invitations by single-use link or email, participant list, payment status read from Arc, email reminders with a 24 hour per-person limit.
-- SplitPay testnet wallet: new users can pay with no browser extension (testnet only).
-
-Sandbox only (no money moves, labelled in the app):
-- NGN quote with rate, fee, "you would pay" and "group receives" lines, and a payment request with a status timeline. The rate is a demo number. Sandbox payments are never counted in a group's total.
-
-Built but not run against the real provider:
-- Yellow Card request signing and webhook verification, built to their published format and unit tested.
-- Google sign-in flow, disabled until credentials exist.
-
-## 4. Test evidence
-
-| Area | Result | How to reproduce |
-|------|--------|------------------|
-| Smart contract | 70 tests passing, including fuzz and invariants | `bun run contracts:test` |
-| Security review | Two high findings (id squatting, recipient self-payment) fixed and re-tested. One medium accepted and documented | `docs/SECURITY_REVIEW.md` |
+| Area | Result | Reproduce |
+|------|--------|-----------|
+| Smart contract | 70 passing (unit, bad-token, fuzz, invariants); source unchanged since `v1.0.0` | `bun run contracts:test`; `git diff v1.0.0 -- contracts/SplitPayGroups.sol contracts/test` is empty |
+| Security review | Two high findings fixed and retested; one medium accepted and documented; no third-party audit yet | `docs/SECURITY_REVIEW.md` |
 | Library maths and link verification | 10 passing | `bun run test:lib` |
-| API server | 38 passing: auth, wallet linking, group index, invites, reminders, quotes, sandbox lifecycle, signing vectors | `bun run test:server` |
-| Live Arc Testnet, contract level | 31 of 31 checks | `bun run e2e:testnet`, hashes in `docs/e2e-testnet-report.json` |
-| Browser run of the real app on Arc Testnet | 17 of 17 checks on two runs: create, invite, join, unlock the testnet wallet, link wallet, NGN sandbox, USDC payment, reminders, second device | `docs/TEST_EVIDENCE.md`, scripts in `docs/ui-verification/` |
-| Lint, types, production build | Clean | `bun run check && bun run build` |
+| API server | 38 passing | `bun run test:server` |
+| Live Arc Testnet, contract level | 31 of 31 checks | `bun run e2e:testnet` |
+| Browser, real app on Arc Testnet | 17 of 17 on two runs, plus a guest-payment run on the v1 release build and on `consumer-v2` | `docs/TEST_EVIDENCE.md`, `docs/ui-verification/` |
+| Lint, types, production build | Clean on both refs | `bun run check && bun run build` |
 
-Group completed on testnet: one group reached 1.00 USDC across four contributors, each payment confirmed onchain.
+Not tested: real email delivery, Google sign-in, anything against Yellow Card or Circle services, load, third-party wallet pickers, mainnet.
 
-## 5. Current limitations (stated plainly)
+## 6. Current limitations
 
-1. **NGN payments are not live.** There is no real conversion, withdrawal or bank transfer. The NGN flow is a labelled sandbox.
-2. **The testnet wallet is not production custody.** Its key is encrypted in the browser with a 6-digit PIN. It refuses to run on mainnet. Production needs Circle passkey wallets or an equivalent.
-3. **Everything runs on Arc Testnet.** Nothing has been deployed to mainnet and no real USDC has moved. Mainnet needs an independent audit and the checklist in `docs/MAINNET_CHECKLIST.md`.
-4. **Email is a development outbox** until a mail provider is configured. In production mode the server refuses to send mail rather than pretending.
-5. **Single-process database.** SQLite is used for development. A hosted deployment needs Postgres and a shared rate limiter.
-6. **Reminders are manual.** There is no scheduler yet.
-7. **Pay-by-bank for NGN to Arc is a custody question.** It needs legal advice and a provider partnership before any live release.
-8. **Smart-contract wallets** (ERC-1271 signatures) are not supported for linking yet. Wallets must be standard accounts.
-9. **Provider facts not yet confirmed:** whether Yellow Card supports Arc, and its fees and limits.
-10. **History scans will not scale as they are.** The public Arc testnet RPC rejected a log query of about 14,000 blocks, so the app reads in smaller chunks. A group's history is read from its creation block, which is fast today, but a dashboard that scans from the contract's first block gets slower as the chain grows. Signed-in users avoid this because the server stores each group's block. A server-side indexer is the real fix (M8).
+1. **No mainnet deployment and no real USDC has moved.** All evidence is from Arc Testnet.
+2. **No independent audit.** The review was automated and tool-assisted. The contract holds no funds and has no admin, which limits impact, but it is not a substitute for an audit.
+3. **NGN is a demonstration only.** No conversion, withdrawal or bank transfer exists. The demo rate is not a market rate.
+4. **A live NGN to Arc USDC path is a custody question.** It needs legal advice and a licensed partner before release (`docs/PRODUCTION_ARCHITECTURE.md` section 6).
+5. **The testnet wallet is not production custody.** A 6-digit PIN protects a key in the browser. It refuses to run on mainnet.
+6. **Email is a development outbox** until a provider is configured; in production mode the server refuses to send rather than pretend.
+7. **Single-process SQLite and in-memory rate limits** are development choices.
+8. **Reminders are manual.** There is no scheduler.
+9. **Smart-contract wallets** cannot be linked yet (standard accounts only).
+10. **History reads do not scale as written.** The public RPC rejected a log query of about 14,000 blocks, so reads are chunked. An indexer is milestone M8.
+11. **A recipient that USDC refuses to pay** (for example a blocklisted address) makes payments to that group fail without moving money. The group must be recreated. Accepted and documented.
+12. **Nicknames are public and permanent** onchain. The app warns before payment.
+13. **No users yet,** and no operational history.
 
-## 6. Milestones
+## 7. Milestones
 
-Dates are a proposed plan, not a commitment, and depend on third parties.
+Proposed, not committed; durations depend on third parties. Each has acceptance criteria so payment can be tied to evidence.
 
-| # | Milestone | Needs | Done when | Proposed time |
-|---|-----------|-------|-----------|---------------|
-| M0 | Freeze v1 | none | Tag, export, hosting config | Done |
-| M1 | Accounts and persistence | none | Done on testnet | Done |
-| M2 | Testnet wallet | none | Done on testnet | Done |
-| M3 | Invites, participants, reminders | none | Done on testnet | Done |
-| M4 | Payment methods and quotes (sandbox) | none | Done as sandbox | Done |
-| M5 | Yellow Card sandbox integration | Yellow Card sandbox keys | Quote and collection run against their sandbox, webhook handled | 2 to 3 weeks |
-| M6 | Circle passkey wallet pilot | Circle Console client key, deployed hostname | A new user pays on testnet with a passkey | 2 to 3 weeks |
-| M7 | Compliance and custody review | Legal counsel | Written position on NGN to USDC | 4 to 6 weeks, parallel |
-| M8 | Hosting, Postgres, mail, scheduled reminders, event indexer | Hosting, mail provider | Public testnet beta | 2 to 3 weeks |
-| M9 | Independent audit and mainnet readiness | Audit firm | Audit report, checklist signed | Depends on audit slot |
-| M10 | Mainnet pilot with small amounts | M9 and explicit approval | First real USDC group, supervised | After M9 |
+| # | Milestone | Needs from others | Acceptance criteria | Proposed time |
+|---|-----------|-------------------|---------------------|---------------|
+| M0-M4 | v1 freeze, accounts, testnet wallet, invites, sandbox payments | none | **Done** (section 3) | Done |
+| M5 | Mainnet pilot of the unchanged contract | Owner's wallet and funds, audit decision | Deployed address, verified source, one supervised small USDC group, transaction hashes published | Owner-led, days |
+| M6 | Real email and hosted beta | Mail provider, hosting | Domain authenticated, bounce handling, Postgres, shared rate limits, public testnet beta | 2 to 3 weeks |
+| M7 | Circle wallet pilot | Circle Console config | A new user creates a wallet and pays on testnet without an extension; token handling reviewed | 2 to 3 weeks |
+| M8 | Event indexer and scheduled reminders | Hosting | Restart-safe indexer, nightly consistency job green, reminders on a schedule with unsubscribe | 2 to 3 weeks |
+| M9 | Yellow Card sandbox integration | Sandbox keys | Quote and collection against their sandbox, signed webhook handled, daily reconciliation with no unexplained breaks for two weeks | 2 to 3 weeks |
+| M10 | Compliance position | Legal counsel | Written position on flows B, C and D (`docs/PRODUCTION_ARCHITECTURE.md` section 6), disclosures drafted | 4 to 6 weeks, parallel |
+| M11 | Independent audit | Audit firm | Report with all high findings fixed | Depends on audit slot |
+| M12 | Live fiat pilot, if M9-M11 allow | Provider agreement, approval | First real NGN-funded contribution with full reconciliation, limited cohort | After M9-M11 |
 
-## 7. Projected operational costs
+## 8. Projected operational costs
 
-Only items we measured are given as numbers. Everything else needs a vendor quote and is marked so.
+Only items we measured have numbers. Everything else needs a vendor quote and says so.
 
 ### Measured: Arc Testnet network fees
 
-From six real transactions (`docs/measured-gas-arc-testnet.json`). Fees on Arc are paid in USDC.
+Six real transactions (`docs/measured-gas-arc-testnet.json`). Fees on Arc are paid in USDC.
 
 | Action | Gas used | Fee at the observed price |
 |--------|----------|---------------------------|
 | Create a group | 140,010 | about 0.0032 USDC |
 | Approve exact amount | 55,438 | about 0.0013 USDC |
 | First payment by a wallet | 138,518 | about 0.0032 USDC |
-| Later payment (storage already warm) | 78,796 | about 0.0018 USDC |
+| Later payment by a wallet | 78,796 | about 0.0018 USDC |
 
-A group with N paying people costs about `0.0032 + N x 0.0045` USDC in network fees at that price. For a group of 4 that is about 0.021 USDC. These are testnet measurements from one day. The mainnet fee level must be measured again before pricing anything.
+A group with N payers costs about `0.0032 + N x 0.0045` USDC in network fees at that price (about 0.021 USDC for four). One day's testnet observation; mainnet must be measured before pricing anything.
 
-### Not measured: needs quotes
+### Needs a quote
 
-| Item | Driver | How to estimate |
-|------|--------|-----------------|
-| Hosting (one container with a persistent volume) | Users and uptime | Provider's published price at deployment |
-| Managed Postgres | Data and backups | Provider quote |
-| Dedicated RPC | Read volume. Our public RPC returned rate-limit responses under repeated polling | Provider quote |
-| Email delivery | Codes, invitations, reminders per active group | Provider plan |
-| Circle wallets and gas sponsorship | Active wallets and sponsored transactions | Circle's pricing for the chosen wallet type |
-| Circle onramp | Volume and KYB status | Circle's pricing |
-| Yellow Card | Collection and payout fees, minimums | Commercial terms after KYB |
-| Independent smart-contract audit | Scope | Audit firm quote |
-| Legal and compliance advice | Jurisdictions | Counsel quote |
-| Monitoring and support | Team time | Internal |
+| Item | Driver |
+|------|--------|
+| Hosting (container, persistent volume) | Users, uptime |
+| Managed Postgres and backups | Data volume, retention |
+| Dedicated RPC (public RPC rate-limited and rejected wide log ranges in our runs) | Read volume |
+| Transactional email | Codes, invites and reminders per active group |
+| Circle wallets, gas sponsorship, onramp | Circle's pricing for the chosen products |
+| Yellow Card fees and minimums | Commercial terms after KYB |
+| Wallet and sanctions screening vendor | Volume |
+| Independent smart-contract audit | Scope, firm |
+| Legal and compliance counsel | Jurisdictions |
+| Support and monitoring | Team time |
 
-Revenue model note: v1 and v2 charge no platform fee. If fees are introduced later they need a new contract version and a new review.
+SplitPay charges no platform fee in v1 or v2. Adding one needs a new contract version and a new review.
 
-## 8. How funds would be used
+## 9. Use of funds
 
-Priority order: independent audit, Circle passkey wallet pilot, Yellow Card sandbox and legal review, hosting and managed services, mainnet pilot gas and support.
+Priority order: independent audit; Circle wallet pilot; hosted beta with real email; Yellow Card sandbox and legal review; mainnet pilot gas and support. The requested amount and the split are for the applicant to set (**[applicant]**), after the quotes above are collected.
+
+## 10. Honest answers to likely reviewer questions
+
+- **Is anything live?** No production system exists. The contract and app run on Arc Testnet.
+- **Do you hold user funds?** No. The contract moves funds payer to recipient. No SplitPay wallet or account holds customer funds in any shipped flow.
+- **Can Nigerians pay in naira today?** No. The naira flow is a sandbox demonstration.
+- **Does an account block paying?** No. Guests pay from any EVM wallet.
+- **What stops a bad link?** The group page recomputes the metadata hash against the onchain record, shows the creator and recipient, and flags any mismatch.
