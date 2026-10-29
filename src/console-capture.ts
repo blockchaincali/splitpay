@@ -16,6 +16,11 @@
  * Built with Arc Studio — https://studio.arc.io
  */
 
+import { isEmbeddedInArcStudio } from './lib/studioHost';
+
+/** Capture only runs inside the Arc Studio preview, never on a deployed site. */
+const ACTIVE = isEmbeddedInArcStudio();
+
 type ConsoleLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
 
 interface ConsoleLogEntry {
@@ -208,7 +213,7 @@ function isNoise(message: string): boolean {
 // console.* patching
 // ---------------------------------------------------------------------------
 
-for (const level of LEVELS) {
+for (const level of ACTIVE ? LEVELS : []) {
   const original = console[level].bind(console);
 
   console[level] = (...args: unknown[]): void => {
@@ -230,7 +235,7 @@ for (const level of LEVELS) {
 // Uncaught errors & unhandled rejections — the signals a blank preview hides
 // ---------------------------------------------------------------------------
 
-window.addEventListener('error', (e: ErrorEvent) => {
+if (ACTIVE) window.addEventListener('error', (e: ErrorEvent) => {
   try {
     flushRepeat();
     const source = e.filename ? `${e.filename}:${e.lineno ?? 0}:${e.colno ?? 0}` : undefined;
@@ -246,7 +251,7 @@ window.addEventListener('error', (e: ErrorEvent) => {
   }
 });
 
-window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
+if (ACTIVE) window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
   try {
     flushRepeat();
     const reason: unknown = e.reason;

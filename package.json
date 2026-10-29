@@ -15,6 +15,7 @@
     "contracts:build": "forge build",
     "contracts:test": "forge test",
     "test:lib": "bun test contracts/test-integration/lib.test.ts",
+    "test:security": "bun test contracts/test-integration/security.test.ts",
     "e2e:testnet": "bun run contracts/test-integration/e2e-testnet.ts"
   },
   "dependencies": {
