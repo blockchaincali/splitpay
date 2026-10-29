@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useAccount } from 'wagmi'
+import { sameAddress } from '@/lib/address'
 import { useAccountsAvailable } from '@/account/availability'
 import { AlertTriangle, ArrowLeft, ShieldCheck } from 'lucide-react'
 import type { Hex } from 'viem'
@@ -27,7 +28,7 @@ export function GroupPage({ id }: { id: string }) {
   const hint = hintParam && /^\d+$/.test(hintParam) ? BigInt(hintParam) : null
 
   const { status, group, refetch } = useGroup(groupId)
-  const { items, syncing, progress, error, resync } = useContributions(groupId, group?.collected, hint)
+  const { items, syncing, error, resync } = useContributions(groupId, group?.collected, hint)
   const onPaid = useCallback(() => {
     void refetch()
     void resync()
@@ -46,7 +47,7 @@ export function GroupPage({ id }: { id: string }) {
 
   const verify = verifyMeta(decoded, group)
   const meta = verify === 'verified' ? decoded!.meta : null
-  const isCreator = address?.toLowerCase() === group.creator.toLowerCase()
+  const isCreator = sameAddress(address, group.creator)
 
   return (
     <div className="grid gap-5">
@@ -108,7 +109,7 @@ export function GroupPage({ id }: { id: string }) {
         </div>
       </div>
 
-      <ReceiptList items={items} me={address} syncing={syncing} progress={progress} error={error} />
+      <ReceiptList items={items} me={address} syncing={syncing} error={error} />
     </div>
   )
 }

@@ -102,3 +102,38 @@ Browser runs (stand-in wallet, throwaway testnet key, Arc Testnet):
 Found and fixed during this work: the dev proxy stripped `/api` while the production-style server expected it, which broke the API after a restart. The dev proxy now keeps the prefix, so development and production take the same path.
 
 Not run: the landing check on a real phone; real email, Circle or Yellow Card. `fix/group-creation-rpc` commits `e79fc5a` (overlaps the security hotfix) and `ca8077d` (report-only CSP) were not brought in.
+
+## Group data loading fix (29 October 2026)
+
+**Bug 1, slow group page.** The group page now renders from `getGroup` and the share link alone; the payment list loads behind it. History is read several block windows at a time, spread over the RPC endpoints, starting at the creation block (the `?b=` hint, or the block of the GroupCreated event, or the contract's first block as a last resort). The history and the last scanned block are saved per group, so a revisit fetches only newer blocks. A failed window is retried on a different endpoint with backoff and never discards what already loaded. The percentage counter is gone; a plain "Loading payment history..." line sits under the list.
+
+**Bug 2, new group missing from "Your groups".** A group is saved with its block the moment its creation is confirmed, so it is listed at once. The dashboard then looks for other groups in the background with the same resumable scanner, saving the cursor after every chunk, retrying by itself, and showing an error only if nothing at all could load (otherwise a small "Still syncing" note). Addresses and group ids are compared without regard to letter case.
+
+Measured on Arc Testnet from the sandbox on 29 October 2026 (these are observations of today's public endpoints, not guarantees, and the scanner learns them per endpoint instead of hardcoding them):
+
+| Endpoint | Log range | Parallel calls |
+|----------|-----------|----------------|
+| `rpc.testnet.arc.io` | accepted up to 9,999 blocks, refused 10,000+ with a "rate limit exceeded" message (same text as a real rate limit) | rate-limits bursts |
+| `rpc.blockdaemon.testnet.arc.io` | accepted 50,000, refused 200,000 ("max block range 100000") | 10 at once, no errors |
+| `rpc.quicknode.testnet.arc.io` | accepted 5,000, refused 10,000 ("requested range too large") | rate-limits bursts |
+| `rpc.drpc.testnet.arc.io` | refused every log query tried ("free plan") | n/a |
+
+An earlier version of this fix (one global range limit) mistook rate limits for range limits, shrank the window to a few hundred blocks and made 2,078 calls to scan 200,000 blocks. The per-endpoint version makes 30.
+
+| Check | Result |
+|-------|--------|
+| `bun run test:lib` (adds `history-scan.test.ts`, 19 tests) | 40 passing |
+| `bun run test:landing`, `test:accounts`, `test:server`, `test:security` (real browser), `check:landing` | 18, 10, 39, 8, 61 passing |
+| `forge test` | 70 passing; contract and `contracts/test/` identical to `v1.0.0` |
+| lint, types, `bun run build` | clean |
+
+Browser run on Arc Testnet (stand-in wallet, throwaway key; `docs/ui-verification/speed-journey.ts.txt`):
+- Create a group, then "Go to my groups": the new group is listed in 57 ms, with no scan.
+- Open the group page: title, goal, progress and Pay button in 1.3 s; payment history finished loading 0.1 s later (9 `eth_getLogs` calls).
+- Pay 0.25 USDC: confirmed by the network, and the payment appears in the list 12 ms later.
+- Reload the group page: the payment is shown from the saved history in 0.7 s using 1 `eth_getLogs` call.
+- New browser with empty storage, same wallet: the dashboard finds the wallet's groups by background scan in 2.8 s (30 calls) with no error.
+- A bare link with no creation hint on a new device: page content in 1.2 s, payment history 1.3 s later.
+- No page errors.
+
+Regression tests: BUG 1 (parallel windows, growth, per-endpoint limit learning, endpoint failover and cooldown, partial results kept, contiguous resume point, revisit fetches only new blocks, cursor saved after every chunk, no percentage counter) and BUG 2 (created group listed at once, case-insensitive address and id matching, cursor and groups saved per chunk, errors only when nothing loaded). A simulation of the four real endpoint behaviours finishes a 200,000-block scan in under 40 calls.

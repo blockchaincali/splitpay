@@ -67,3 +67,9 @@ If the contract changes: `forge build`, regenerate `src/lib/splitpayAbi.ts` from
 - Account features (sign-in, invitations, reminders, saved groups, NGN sandbox) render only if `useAccountsAvailable()` is true: build flag `VITE_ACCOUNTS_ENABLED=true` AND `GET /api/health` returns `{ ok: true, service: "splitpay-api" }`. Wrap any new account-only page in `AccountsGate`. `bun run test:accounts` enforces this.
 - No Google sign-in. Do not reintroduce it without a configured OAuth client.
 - The dev proxy keeps `/api`; the API server strips it. `src/tracing.ts` and `src/console-capture.ts` are replaced by stubs in production builds (see `vite.config.ts`); do not weaken that.
+
+## Data loading rules (29 October 2026)
+
+- Pages render from `getGroup` / local lists first. Log scans (`src/lib/historyScan.ts`) run in the background, several windows at once, resumable, with the cursor saved after every chunk. Never block a page on a scan and never show a percentage.
+- Do not hardcode RPC range limits: public endpoints differ and change. The scanner learns per endpoint and the app stores what it learned (`rpc-limits:<url>`).
+- A group is saved locally (`rememberCreatedGroup`) the moment its creation is confirmed. Compare addresses with `sameAddress` and group ids in lower case.

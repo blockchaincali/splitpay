@@ -6,7 +6,7 @@ import { SPLITPAY_ADDRESS, TARGET_CHAIN_ID } from './deployment'
 import { friendlyError } from './errors'
 import { logFailure } from './log'
 import { hashMetaText } from './metadata'
-import { saveStoredGroup } from './localGroups'
+import { rememberCreatedGroup, saveStoredGroup } from './localGroups'
 
 export type CreateStep = 'idle' | 'switching' | 'wallet' | 'confirming' | 'done' | 'failed'
 
@@ -89,7 +89,9 @@ export function useCreateGroup() {
           (e) => e.address.toLowerCase() === contract.toLowerCase() && e.args.groupId === expectedId,
         )
         if (!created) throw new Error('The group was mined but its creation event was not found.')
+        // Remember the group on this device the moment it is confirmed: "Your groups" lists it at once, with no scan.
         saveStoredGroup({ groupId: expectedId, text: input.metaText, block: mined.blockNumber.toString() })
+        rememberCreatedGroup(address, expectedId, mined.blockNumber)
         setResult({ groupId: expectedId, txHash: hash, blockNumber: mined.blockNumber, text: input.metaText })
         setStep('done')
       } catch (e) {

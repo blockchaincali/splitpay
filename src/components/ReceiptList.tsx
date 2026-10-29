@@ -3,6 +3,7 @@ import { usePublicClient } from 'wagmi'
 import { Receipt } from 'lucide-react'
 import type { Contribution } from '@/lib/groupData'
 import { TARGET_CHAIN_ID } from '@/lib/deployment'
+import { sameAddress } from '@/lib/address'
 import { fmtUsdc, shortAddress } from '@/lib/money'
 import { formatTimestamp } from '@/lib/time'
 import { TxLink } from './ui'
@@ -22,13 +23,11 @@ export function ReceiptList({
   items,
   me,
   syncing,
-  progress,
   error,
 }: {
   items: Contribution[]
   me?: string
   syncing: boolean
-  progress: number | null
   error: string | null
 }) {
   const sorted = [...items].sort((a, b) => (a.blockNumber === b.blockNumber ? b.logIndex - a.logIndex : a.blockNumber > b.blockNumber ? -1 : 1))
@@ -36,24 +35,19 @@ export function ReceiptList({
     <section className="card" aria-labelledby="receipts-title">
       <div className="flex items-center justify-between gap-2">
         <h2 id="receipts-title" className="display text-xl font-bold">Payments</h2>
-        {syncing ? (
-          <span className="text-sm" style={{ color: 'var(--muted)' }} role="status">
-            Updating{progress !== null && progress < 100 ? ` ${progress}%` : '…'}
-          </span>
-        ) : null}
       </div>
       <p className="hint">Every payment below is confirmed on the network. Nicknames are public.</p>
       {error ? <p className="error-text" role="status">{error}</p> : null}
 
-      {sorted.length === 0 ? (
+      {sorted.length === 0 && !syncing ? (
         <div className="card-inner mt-3 flex items-center gap-3 text-sm" style={{ color: 'var(--ink-2)' }}>
           <Receipt className="size-5 shrink-0" aria-hidden="true" />
-          {syncing ? 'Looking for payments…' : 'No payments yet. The first confirmed payment will show up here.'}
+          No payments yet. The first confirmed payment will show up here.
         </div>
-      ) : (
+      ) : sorted.length === 0 ? null : (
         <ul className="mt-3 grid gap-2">
           {sorted.map((c) => {
-            const mine = me && c.contributor.toLowerCase() === me.toLowerCase()
+            const mine = sameAddress(me, c.contributor)
             return (
               <li key={`${c.txHash}:${c.logIndex}`} className="card-inner" style={mine ? { outline: '2px solid var(--teal)' } : undefined}>
                 <div className="flex items-baseline justify-between gap-3">
@@ -75,6 +69,9 @@ export function ReceiptList({
           })}
         </ul>
       )}
+      {syncing ? (
+        <p className="hint mt-3" role="status" data-testid="history-loading">Loading payment history...</p>
+      ) : null}
     </section>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useReadContract } from 'wagmi'
+import { sameAddress } from '@/lib/address'
 import { openConnectChooser } from '@/wallet/walletUi'
 import { erc20Abi, type Address, type Hex } from 'viem'
 import { CheckCircle2 } from 'lucide-react'
@@ -43,7 +44,7 @@ export function PayPanel({ groupId, group, meta, onPaid }: Props) {
   const remaining = group.target > group.collected ? group.target - group.collected : 0n
   const full = remaining === 0n
   const closed = !full && Number(group.deadline) < now
-  const isRecipient = Boolean(address && address.toLowerCase() === group.recipient.toLowerCase())
+  const isRecipient = sameAddress(address, group.recipient)
 
   const options = useMemo(() => {
     if (!meta) return [] as { label: string; amount: bigint }[]

@@ -1,0 +1,120 @@
+import { chromium, type Page, type BrowserContext } from 'playwright-core'
+import { privateKeyToAccount } from 'viem/accounts'
+import { installWallet } from './wallet'
+
+const keys = JSON.parse(await Bun.file('/tmp/e2e/keys.json').text())
+const BASE = process.env.BASE ?? 'http://localhost:5173'
+let fail = 0
+const ok = (n: string, c: boolean, d = '') => { console.log((c ? 'PASS ' : 'FAIL ') + n + (d ? '  ' + d : '')); if (!c) fail++ }
+const ms = (t0: number) => Date.now() - t0
+const logCalls = (ctx: BrowserContext) => {
+  const c = { getLogs: 0, total: 0 }
+  ctx.on('request', (r) => {
+    if (r.method() !== 'POST') return
+    const body = r.postData() ?? ''
+    if (!/"jsonrpc"/.test(body)) return
+    c.total++
+    if (body.includes('eth_getLogs')) c.getLogs++
+  })
+  return c
+}
+const browser = await chromium.launch()
+const errors: string[] = []
+const mk = async (key: string) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+  await installWallet(ctx, key as `0x${string}`, [])
+  const calls = logCalls(ctx)
+  const page = await ctx.newPage()
+  page.on('pageerror', (e) => errors.push(e.message))
+  return { ctx, page, calls }
+}
+
+// ---------- create a group (organiser) ----------
+const o = await mk(keys.organiser)
+const TITLE = `Speed test ${Date.now() % 100000}`
+await o.page.goto(BASE + '/new', { waitUntil: 'networkidle' })
+await o.page.getByRole('button', { name: /Wallet 0x.* connected/ }).first().waitFor({ timeout: 15000 })
+await o.page.getByLabel('What is it for?').fill(TITLE)
+await o.page.getByLabel('Total to collect (USDC)').fill('1.00')
+await o.page.getByLabel(/Who receives the money/).fill(privateKeyToAccount(keys.recipient).address)
+await o.page.getByLabel(/I have checked/).check()
+await o.page.getByRole('button', { name: 'Create group' }).click()
+await o.page.getByText('Your group is live').waitFor({ timeout: 120000 })
+const link = await o.page.getByRole('textbox', { name: 'Share link' }).inputValue()
+ok('group created and confirmed', true)
+
+// ---------- BUG 2: "Your groups" lists it straight away (no scan needed) ----------
+const callsBefore = o.calls.getLogs
+let t = Date.now()
+await o.page.getByRole('button', { name: 'Go to my groups' }).click()
+await o.page.getByText(TITLE).first().waitFor({ timeout: 15000 })
+const listedMs = ms(t)
+ok('new group listed on "Your groups" straight away', listedMs < 3000, `${listedMs} ms (local list, background sync still running or done)`)
+await o.page.screenshot({ path: '/tmp/shots/speed-dashboard.png' })
+
+// ---------- BUG 1: open the group page quickly ----------
+t = Date.now()
+await o.page.goto(link, { waitUntil: 'domcontentloaded' })
+await o.page.getByRole('heading', { name: TITLE }).waitFor({ timeout: 30000 })
+await o.page.getByRole('button', { name: /^Pay/ }).first().waitFor({ timeout: 30000 })
+const openMs = ms(t)
+ok('group page shows title, goal, progress and Pay button in a few seconds', openMs < 6000, `${openMs} ms`)
+const hasPercentCounter = await o.page.getByText(/Updating\s*\d+%/).count()
+ok('no "Updating NN%" counter anywhere', hasPercentCounter === 0)
+await o.page.screenshot({ path: '/tmp/shots/speed-group-open.png' })
+const loadingLine = o.page.getByText('Loading payment history...')
+const sawLoading = await loadingLine.isVisible().catch(() => false)
+console.log('INFO  "Loading payment history..." visible right after open:', sawLoading)
+await o.page.waitForFunction(() => !document.body.innerText.includes('Loading payment history...'), null, { timeout: 60000 })
+ok('background history load finished (line gone)', true, `${ms(t)} ms after open`)
+console.log('INFO  eth_getLogs calls so far in the organiser browser:', o.calls.getLogs, '(before opening group page:', callsBefore, ')')
+
+// ---------- pay into it (organiser wallet pays its own group; recipient is a different address) ----------
+await o.page.getByRole('button', { name: /^Pay/ }).first().click()
+await o.page.getByText('Payment confirmed').first().waitFor({ timeout: 120000 })
+ok('payment confirmed by the network', true)
+t = Date.now()
+await o.page.getByText('0.25').first().waitFor()
+await o.page.locator('a[href*="/tx/"]').first().waitFor({ timeout: 30000 })
+const payListMs = ms(t)
+const rows = await o.page.locator('ul li:has(a[href*="/tx/"])').count()
+ok('payment appears in the Payments list', rows >= 1, `${rows} row(s), ${payListMs} ms after confirmation`)
+
+// ---------- revisit: history comes from the saved copy, only new blocks are fetched ----------
+const before = o.calls.getLogs
+t = Date.now()
+await o.page.reload({ waitUntil: 'domcontentloaded' })
+await o.page.locator('a[href*="/tx/"]').first().waitFor({ timeout: 30000 })
+const revisitMs = ms(t)
+await o.page.waitForFunction(() => !document.body.innerText.includes('Loading payment history...'), null, { timeout: 60000 })
+const revisitLogs = o.calls.getLogs - before
+ok('revisit shows the payment immediately from the saved history', revisitMs < 6000, `${revisitMs} ms`)
+ok('revisit fetches only a handful of log windows (not from the start)', revisitLogs <= 4, `${revisitLogs} eth_getLogs call(s)`)
+
+// ---------- fresh device: same wallet, empty storage: groups found by the background scan ----------
+const f = await mk(keys.organiser)
+t = Date.now()
+await f.page.goto(BASE + '/dashboard', { waitUntil: 'domcontentloaded' })
+// A fresh device has no titles (those live in the link); the group shows as "Untitled group" once found.
+await f.page.getByText(/Untitled group/).first().waitFor({ timeout: 90000 })
+ok('fresh browser: background scan finds the wallet\'s groups', true, `${ms(t)} ms, ${f.calls.getLogs} eth_getLogs call(s)`)
+const noErr = (await f.page.getByText(/Could not look up/).count()) === 0
+ok('no "Could not look up your groups" error', noErr)
+await f.page.screenshot({ path: '/tmp/shots/speed-dashboard-fresh.png' })
+
+// ---------- a bare link (no ?b= creation hint) on a fresh device: page is instant, history fills in behind it ----------
+const bare = link.replace(/&b=\d+/, '')
+const g = await mk(keys.organiser)
+t = Date.now()
+await g.page.goto(bare, { waitUntil: 'domcontentloaded' })
+await g.page.getByRole('heading', { name: TITLE }).waitFor({ timeout: 30000 })
+await g.page.getByRole('button', { name: /^Pay/ }).first().waitFor({ timeout: 30000 })
+const bareOpen = ms(t)
+ok('bare link: page content shows right away', bareOpen < 6000, `${bareOpen} ms`)
+t = Date.now()
+await g.page.locator('a[href*="/tx/"]').first().waitFor({ timeout: 60000 })
+ok('bare link: payment history fills in behind the page', true, `${ms(t)} ms after the page was usable, ${g.calls.getLogs} eth_getLogs call(s)`)
+await g.page.screenshot({ path: '/tmp/shots/speed-group-bare.png' })
+ok('no page errors', errors.length === 0, errors.slice(0, 2).join(' | ').slice(0, 200))
+await browser.close()
+process.exit(fail ? 1 : 0)

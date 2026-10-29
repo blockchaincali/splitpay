@@ -19,7 +19,7 @@
     "check:landing": "node scripts/landing-check/run.mjs",
     "contracts:build": "forge build",
     "contracts:test": "forge test",
-    "test:lib": "bun test contracts/test-integration/lib.test.ts contracts/test-integration/rpc-errors.test.ts",
+    "test:lib": "bun test contracts/test-integration/lib.test.ts contracts/test-integration/rpc-errors.test.ts contracts/test-integration/history-scan.test.ts",
     "test:accounts": "bun test contracts/test-integration/accounts-optional.test.ts",
     "test:security": "bun test contracts/test-integration/security.test.ts",
     "e2e:testnet": "bun run contracts/test-integration/e2e-testnet.ts"
