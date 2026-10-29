@@ -137,3 +137,98 @@ input[type="checkbox"] {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------------------------------------------
+   Landing-page walkthrough (src/landing). Everything is namespaced demo-* and driven by custom
+   properties set inline: --d (start delay), --a / --b (appear / disappear times).
+   ------------------------------------------------------------------------------------------------ */
+.demo-scene {
+  min-height: 100%;
+}
+.demo-in {
+  opacity: 0;
+  animation: demo-in 0.5s ease-out var(--d, 0s) forwards;
+}
+.demo-pop {
+  opacity: 0;
+  animation: demo-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) var(--d, 0s) forwards;
+}
+.demo-show {
+  opacity: 0;
+  animation: demo-on 0.2s linear var(--d, 0s) forwards;
+}
+.demo-gone {
+  opacity: 1;
+  animation: demo-off 0.2s linear var(--d, 0s) forwards;
+}
+.demo-flash {
+  opacity: 0;
+  animation: demo-on 0.2s linear var(--a, 0s) forwards, demo-off 0.2s linear var(--b, 1s) forwards;
+}
+.demo-track {
+  transform: scaleX(0);
+  animation: demo-track 5s linear forwards;
+}
+.demo-timer {
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: demo-timer var(--dur, 7s) linear forwards;
+}
+
+@keyframes demo-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes demo-pop {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes demo-on {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes demo-off {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+/* 50.00 at 1.3s, 80.00 at 2.6s, 105.00 at 3.8s, of 120.00: matches the Counter times in PreviewScenes.tsx */
+@keyframes demo-track {
+  0%, 22% { transform: scaleX(0); }
+  26%, 48% { transform: scaleX(0.4167); }
+  52%, 72% { transform: scaleX(0.6667); }
+  76%, 100% { transform: scaleX(0.875); }
+}
+@keyframes demo-timer {
+  to { transform: scaleX(1); }
+}
+
+/* Paused while off screen, in a background tab, or paused by the visitor. */
+.demo-stage[data-running='false'],
+.demo-stage[data-running='false'] * {
+  animation-play-state: paused !important;
+}
+
+/* Reduced motion: no autoplay and no movement. Every scene shows its finished state at once. */
+@media (prefers-reduced-motion: reduce) {
+  .demo-stage *,
+  .demo-stage {
+    animation: none !important;
+    transition: none !important;
+  }
+  .demo-in,
+  .demo-show,
+  .demo-pop {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .demo-gone,
+  .demo-flash {
+    opacity: 0 !important;
+  }
+  .demo-track {
+    transform: scaleX(0.875) !important;
+  }
+  .demo-timer {
+    display: none;
+  }
+}
