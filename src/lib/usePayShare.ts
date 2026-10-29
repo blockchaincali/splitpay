@@ -4,6 +4,7 @@ import { erc20Abi, parseEventLogs, type Address, type Hex, type PublicClient } f
 import { splitPayAbi } from './splitpayAbi'
 import { SPLITPAY_ADDRESS, TARGET_CHAIN_ID, USDC } from './deployment'
 import { friendlyError } from './errors'
+import { logFailure } from './log'
 
 export type PayStep =
   | 'idle'
@@ -55,13 +56,16 @@ export function usePayShare(groupId: Hex) {
       setReceipt(null)
       setAllowHash(null)
       setPayHash(null)
+      let stage = 'start'
       try {
         if (chainId !== TARGET_CHAIN_ID) {
+          stage = 'switching'
           setStep('switching')
           await switchChainAsync({ chainId: TARGET_CHAIN_ID })
         }
 
         // 1) Allow exactly this amount (skipped when the wallet already allowed at least it).
+        stage = 'reading-allowance'
         const current = await client.readContract({
           address: USDC.address as Address,
           abi: erc20Abi,
@@ -91,6 +95,7 @@ export function usePayShare(groupId: Hex) {
         }
 
         // 2) Dry-run the payment so a failure is explained before the wallet asks to sign.
+        stage = 'simulating'
         await client.simulateContract({
           account: address,
           address: SPLITPAY_ADDRESS,
@@ -100,6 +105,7 @@ export function usePayShare(groupId: Hex) {
         })
 
         // 3) Pay. The contract sends the USDC straight to the recipient.
+        stage = 'pay-wallet'
         setStep('pay-wallet')
         const hash = await writeContractAsync({
           address: SPLITPAY_ADDRESS,
@@ -131,7 +137,8 @@ export function usePayShare(groupId: Hex) {
         })
         setStep('done')
       } catch (e) {
-        const f = friendlyError(e)
+        const f = friendlyError(e, { stage })
+        if (!f.cancelled) logFailure('pay', stage, e, { walletChainId: chainId, targetChainId: TARGET_CHAIN_ID })
         if (f.cancelled) {
           setStep('idle')
           setError(f.message)
