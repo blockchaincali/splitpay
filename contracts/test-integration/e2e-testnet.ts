@@ -117,7 +117,22 @@ await expectRevert('payment after the deadline reverts', () => pub.simulateContr
 const head = await pub.getBlockNumber()
 const logs = await pub.getLogs({ address: SPLITPAY, event: getAbiItem({ abi: splitPayAbi, name: 'ContributionReceived' }), args: { groupId }, fromBlock: created.blockNumber, toBlock: head, strict: true })
 check('log scan from the creation block finds both payments with names', logs.length === 2 && logs[0].args.name === name && logs.reduce((s, l) => s + l.args.amount, 0n) === target)
-const mine = await pub.getLogs({ address: SPLITPAY, event: getAbiItem({ abi: splitPayAbi, name: 'GroupCreated' }), args: { creator: acct.organiser.address }, fromBlock: DEPLOY_BLOCK, toBlock: head, strict: true })
+// The public RPC rejects very wide ranges ("requested range too large"), so scan in chunks and halve on error, like the app does.
+const created_event = getAbiItem({ abi: splitPayAbi, name: 'GroupCreated' })
+const mine: { args: { groupId: Hex } }[] = []
+{
+  let size = 5000n
+  for (let from = DEPLOY_BLOCK; from <= head; ) {
+    const to = from + size - 1n > head ? head : from + size - 1n
+    try {
+      mine.push(...(await pub.getLogs({ address: SPLITPAY, event: created_event, args: { creator: acct.organiser.address }, fromBlock: from, toBlock: to, strict: true })))
+      from = to + 1n
+    } catch (e) {
+      if (size <= 100n) throw e
+      size /= 2n
+    }
+  }
+}
 check('organiser dashboard scan finds both groups', mine.length >= 2 && mine.some((l) => l.args.groupId === groupId))
 
 const failed = results.filter((r) => !r.ok)

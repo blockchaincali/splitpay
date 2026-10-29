@@ -1,61 +1,47 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useAccount, usePublicClient, useReadContracts } from 'wagmi'
-import { ConnectKitButton } from 'connectkit'
-import type { PublicClient } from 'viem'
+import { useAccount, useReadContracts } from 'wagmi'
+import { openConnectChooser } from '@/wallet/walletUi'
 import { Plus } from 'lucide-react'
 import { splitPayAbi } from '@/lib/splitpayAbi'
-import { DEPLOY_BLOCK, SPLITPAY_ADDRESS, TARGET_CHAIN_ID } from '@/lib/deployment'
-import { fetchCreatedGroups } from '@/lib/groupData'
-import { getCursor, getKnownIds, getStoredGroups, groupPath, saveCursor, saveKnownIds, type StoredGroupRef } from '@/lib/localGroups'
+import { SPLITPAY_ADDRESS, TARGET_CHAIN_ID } from '@/lib/deployment'
+import { syncMyGroups } from '@/lib/groupData'
+import { normAddress } from '@/lib/address'
+import { getKnownIds, getStoredGroups, groupPath, type StoredGroupRef } from '@/lib/localGroups'
 import { decodeMeta, encodeMetaText } from '@/lib/metadata'
 import { fmtUsdc, percent } from '@/lib/money'
 import { navigate } from '@/lib/router'
 import { timeLeft, useNow } from '@/lib/time'
 import { Chip, CopyButton, Notice, Spinner } from '@/components/ui'
 import { buildShareLink } from '@/lib/share'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/api/client'
+import { useSession } from '@/account/SessionProvider'
+import { useAccountsAvailable } from '@/account/availability'
 
 export function Dashboard() {
   const { address, isConnected } = useAccount()
-  const client = usePublicClient({ chainId: TARGET_CHAIN_ID }) as PublicClient | undefined
-  const [scanned, setScanned] = useState<StoredGroupRef[] | null>(null)
-  const refs = useMemo(() => scanned ?? (address ? getKnownIds(address) : []), [scanned, address])
-  const [scanning, setScanning] = useState(false)
-  const [scanPct, setScanPct] = useState<number | null>(null)
-  const [scanError, setScanError] = useState<string | null>(null)
+  // Groups already saved on this device (including one created a moment ago) are listed at once, with no scan.
+  const [tick, setTick] = useState(0)
+  // `tick` changes whenever the background scan saves something new, so the list re-reads local storage.
+  const refs = useMemo(() => (tick >= 0 && address ? getKnownIds(address) : []), [address, tick])
   const now = useNow(30000)
 
-  // Find this wallet's groups from GroupCreated logs; remember where the scan stopped.
-  useEffect(() => {
-    if (!address || !client) return
-    let live = true
-    const run = async () => {
-      setScanning(true)
-      setScanError(null)
-      try {
-        const cursor = getCursor(address)
-        const from = cursor !== null ? cursor + 1n : DEPLOY_BLOCK
-        const { groups, head } = await fetchCreatedGroups(client, address, from, (p) => live && setScanPct(p))
-        if (!live) return
-        const known = new Map(getKnownIds(address).map((r) => [r.groupId.toLowerCase(), r]))
-        groups.forEach((g) => known.set(g.groupId.toLowerCase(), { groupId: g.groupId, block: g.blockNumber.toString() }))
-        const merged = [...known.values()].sort((a, b) => Number(BigInt(b.block) - BigInt(a.block)))
-        saveKnownIds(address, merged)
-        saveCursor(address, head)
-        setScanned(merged)
-      } catch {
-        if (live) setScanError('Could not look up your groups right now. Pull to refresh in a moment.')
-      } finally {
-        if (live) {
-          setScanning(false)
-          setScanPct(null)
-        }
-      }
-    }
-    void run()
-    return () => {
-      live = false
-    }
-  }, [address, client])
+  // Look for other groups of this wallet in the background: several block windows at a time, the cursor and any groups found
+  // are saved after every chunk, failed windows are retried on another endpoint, and the whole thing retries by itself.
+  const sync = useQuery({
+    queryKey: ['my-groups', TARGET_CHAIN_ID, normAddress(address)],
+    enabled: Boolean(address && SPLITPAY_ADDRESS),
+    retry: 8,
+    retryDelay: (n) => Math.min(15_000, 800 * 2 ** n),
+    refetchOnWindowFocus: false,
+    refetchInterval: (q) => (q.state.status === 'error' ? 20_000 : false),
+    queryFn: async () => {
+      await syncMyGroups(address!, () => setTick((t) => t + 1))
+      return true
+    },
+  })
+  const syncing = sync.isFetching || sync.failureCount > 0
+  const nothingLoaded = refs.length === 0 && sync.isError
 
   const reads = useReadContracts({
     contracts: refs.map((r) => ({
@@ -95,12 +81,13 @@ export function Dashboard() {
 
   if (!isConnected)
     return (
-      <div className="card mx-auto max-w-md text-center">
-        <h1 className="display text-2xl font-bold">Your groups</h1>
-        <p className="mt-2" style={{ color: 'var(--ink-2)' }}>Connect the wallet you used to create groups to see them here.</p>
-        <ConnectKitButton.Custom>
-          {({ show }) => <button type="button" className="btn-primary mt-4" onClick={show}>Connect wallet</button>}
-        </ConnectKitButton.Custom>
+      <div className="grid gap-6">
+        <ServerGroups />
+        <div className="card mx-auto max-w-md text-center">
+          <h1 className="display text-2xl font-bold">Your groups</h1>
+          <p className="mt-2" style={{ color: 'var(--ink-2)' }}>Connect the wallet you used to create groups to see them here.</p>
+          <button type="button" className="btn-primary mt-4" onClick={openConnectChooser}>Connect wallet</button>
+        </div>
       </div>
     )
 
@@ -110,7 +97,7 @@ export function Dashboard() {
         <div>
           <h1 className="display text-3xl font-bold sm:text-4xl">Your groups</h1>
           <p className="hint" role="status">
-            {scanning ? <><Spinner className="mr-1 inline size-3.5" /> Looking for your groups{scanPct !== null ? ` (${scanPct}%)` : '…'}</> : 'Live from the network.'}
+            {syncing ? <><Spinner className="mr-1 inline size-3.5" /> Still syncing. Your newest groups are already shown.</> : 'Live from the network.'}
           </p>
         </div>
         <button type="button" className="btn-primary btn-sm" onClick={() => navigate('/new')}>
@@ -118,7 +105,8 @@ export function Dashboard() {
         </button>
       </div>
 
-      {scanError ? <Notice tone="warn">{scanError}</Notice> : null}
+      {nothingLoaded ? <Notice tone="warn">We could not look up your groups right now. We will keep trying.</Notice> : null}
+      <ServerGroups />
 
       <dl className="grid grid-cols-3 gap-3">
         {[
@@ -133,7 +121,7 @@ export function Dashboard() {
         ))}
       </dl>
 
-      {rows.length === 0 && !scanning ? (
+      {rows.length === 0 && !syncing && !nothingLoaded ? (
         <div className="card text-center">
           <p className="display text-xl font-bold">No groups yet</p>
           <p className="mt-1" style={{ color: 'var(--ink-2)' }}>Create your first group and share the link.</p>
@@ -206,9 +194,59 @@ function GroupRow({ row, now }: { row: Row; now: number }) {
       )}
       <div className="mt-auto flex items-center gap-2">
         <button type="button" className="btn-primary btn-sm flex-1" onClick={() => navigate(path)}>View payments</button>
+        <button type="button" className="btn-ghost btn-sm" onClick={() => navigate(`/g/${row.ref.groupId}/manage${path.slice(path.indexOf('?'))}`)}>People</button>
         {link ? <CopyButton text={link} label={`Copy share link for ${row.title}`} className="border" /> : null}
       </div>
       {!row.text ? <p className="hint">Details for this group were saved on another device. The link still works and shows the amounts from the network.</p> : null}
     </li>
+  )
+}
+
+interface ServerGroupsRes {
+  owned: { groupId: string; title: string; path: string; participantCount: number }[]
+  joined: { groupId: string; title: string; path: string; expectedAmount: string; status: string }[]
+}
+
+/** Groups saved to the signed-in account. Available on any device after signing in. */
+function ServerGroups() {
+  const { available } = useAccountsAvailable()
+  const { user } = useSession()
+  const q = useQuery({ queryKey: ['server-groups'], queryFn: () => api.get<ServerGroupsRes>('/groups'), enabled: available && Boolean(user), retry: 1 })
+  if (!available) return null
+  if (!user) {
+    return (
+      <Notice tone="teal" title="Keep your groups on every device">
+        <button type="button" className="underline" onClick={() => navigate('/signin?next=/dashboard')}>Sign in</button> to save groups, invite people and send reminders. Your payments still settle on Arc.
+      </Notice>
+    )
+  }
+  if (!q.data || (q.data.owned.length === 0 && q.data.joined.length === 0)) return null
+  return (
+    <section className="card grid gap-3" aria-labelledby="saved">
+      <h2 id="saved" className="display text-xl font-bold">Saved to your account</h2>
+      <ul className="grid gap-2 md:grid-cols-2">
+        {q.data.owned.map((g) => (
+          <li key={g.groupId} className="card-inner flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{g.title}</p>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>{g.participantCount} {g.participantCount === 1 ? 'person' : 'people'} invited</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" className="btn-ghost btn-sm" onClick={() => navigate(g.path)}>Open</button>
+              <button type="button" className="btn-primary btn-sm" onClick={() => navigate(`/g/${g.groupId}/manage${g.path.slice(g.path.indexOf('?'))}`)}>People</button>
+            </div>
+          </li>
+        ))}
+        {q.data.joined.map((g) => (
+          <li key={`j-${g.groupId}`} className="card-inner flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{g.title}</p>
+              <p className="text-sm tabular-nums" style={{ color: 'var(--muted)' }}>Your share {fmtUsdc(BigInt(g.expectedAmount))} USDC</p>
+            </div>
+            <button type="button" className="btn-primary btn-sm" onClick={() => navigate(g.path)}>Pay</button>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

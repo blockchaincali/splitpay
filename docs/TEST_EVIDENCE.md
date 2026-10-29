@@ -59,7 +59,6 @@ The only browser console error in the run is an expected 404 when the organiser 
 ## Not tested
 
 - Real email delivery (no provider configured).
-- Google sign-in (no credentials).
 - Anything against Yellow Card or Circle services (no credentials).
 - The wallet-picker modal of third-party wallets (the stand-in wallet connects automatically).
 - Load or scale testing, and SQLite behaviour across many users.
@@ -78,3 +77,82 @@ The only browser console error in the run is an expected 404 when the organiser 
 The guest-journey script ended with a timeout at its last step on both runs because it used an outdated field label for the custom-amount form; that step is a script defect, not an app defect (the screen was verified at four widths separately, above). The script has been corrected in `docs/ui-verification/`.
 
 Browser runs used a stand-in wallet with throwaway testnet keys. They did not exercise a real browser-extension wallet.
+
+## GitHub sync and wallet-first change (29 October 2026)
+
+Merged `github/main` (PR #1 security hotfix, PR #2 landing page) into `consumer-v2`, ported `fe9168f` (RPC failover, clearer errors), then made accounts optional. The contract and `contracts/test/` are identical to `v1.0.0`.
+
+| Check | Result |
+|-------|--------|
+| `forge build`, `forge test` | Build succeeds, 70 of 70 tests pass |
+| `bun run typecheck`, lint | 0 errors, 0 warnings |
+| `bun run build` (accounts flag unset, as on a static host) | Succeeds |
+| `bun run test:lib` (includes the RPC failover and error-classification tests) | 21 passing |
+| `bun run test:landing` | 18 passing |
+| `bun run check:landing` (real browser, built site) | 61 passed, 0 failed |
+| `bun run test:security` (includes real-browser checks that the production build leaves the wallet, fetch and console alone) | 8 passing |
+| `bun run test:accounts` (new) | 10 passing: health check rejects HTML, wrong shapes and network failures; no Google; account pages gated; session request gated |
+| `bun run test:server` | 39 passing (new health test, Google route gone) |
+
+Browser runs (stand-in wallet, throwaway testnet key, Arc Testnet):
+- **Static host, accounts flag off** (a server that rewrites every unknown path to the app, like Vercel, with no API): no sign-in, Google, invite or reminder text on the home, create, dashboard or group page; zero requests to `/api`; the sign-in, account, invite and people pages show a calm "Your wallet is all you need" message; "Your groups" shows from the wallet alone; the full journey passed (create, share link, verify, overpayment blocked, pay, confirmed only after the network confirms, recipient received exactly 0.25 USDC, receipt, dashboard 0.25 of 1.00).
+- **Accounts flag on, API up:** Sign in appears, email sign-in works end to end, the account page has no Google.
+- **Accounts flag on, API unreachable, or `/api/health` answering HTML:** account features disappear with no error.
+
+Found and fixed during this work: the dev proxy stripped `/api` while the production-style server expected it, which broke the API after a restart. The dev proxy now keeps the prefix, so development and production take the same path.
+
+Not run: the landing check on a real phone; real email, Circle or Yellow Card. `fix/group-creation-rpc` commits `e79fc5a` (overlaps the security hotfix) and `ca8077d` (report-only CSP) were not brought in.
+
+## Group data loading fix (29 October 2026)
+
+**Bug 1, slow group page.** The group page now renders from `getGroup` and the share link alone; the payment list loads behind it. History is read several block windows at a time, spread over the RPC endpoints, starting at the creation block (the `?b=` hint, or the block of the GroupCreated event, or the contract's first block as a last resort). The history and the last scanned block are saved per group, so a revisit fetches only newer blocks. A failed window is retried on a different endpoint with backoff and never discards what already loaded. The percentage counter is gone; a plain "Loading payment history..." line sits under the list.
+
+**Bug 2, new group missing from "Your groups".** A group is saved with its block the moment its creation is confirmed, so it is listed at once. The dashboard then looks for other groups in the background with the same resumable scanner, saving the cursor after every chunk, retrying by itself, and showing an error only if nothing at all could load (otherwise a small "Still syncing" note). Addresses and group ids are compared without regard to letter case.
+
+Measured on Arc Testnet from the sandbox on 29 October 2026 (these are observations of today's public endpoints, not guarantees, and the scanner learns them per endpoint instead of hardcoding them):
+
+| Endpoint | Log range | Parallel calls |
+|----------|-----------|----------------|
+| `rpc.testnet.arc.io` | accepted up to 9,999 blocks, refused 10,000+ with a "rate limit exceeded" message (same text as a real rate limit) | rate-limits bursts |
+| `rpc.blockdaemon.testnet.arc.io` | accepted 50,000, refused 200,000 ("max block range 100000") | 10 at once, no errors |
+| `rpc.quicknode.testnet.arc.io` | accepted 5,000, refused 10,000 ("requested range too large") | rate-limits bursts |
+| `rpc.drpc.testnet.arc.io` | refused every log query tried ("free plan") | n/a |
+
+An earlier version of this fix (one global range limit) mistook rate limits for range limits, shrank the window to a few hundred blocks and made 2,078 calls to scan 200,000 blocks. The per-endpoint version makes 30.
+
+| Check | Result |
+|-------|--------|
+| `bun run test:lib` (adds `history-scan.test.ts`, 19 tests) | 40 passing |
+| `bun run test:landing`, `test:accounts`, `test:server`, `test:security` (real browser), `check:landing` | 18, 10, 39, 8, 61 passing |
+| `forge test` | 70 passing; contract and `contracts/test/` identical to `v1.0.0` |
+| lint, types, `bun run build` | clean |
+
+Browser run on Arc Testnet (stand-in wallet, throwaway key; `docs/ui-verification/speed-journey.ts.txt`):
+- Create a group, then "Go to my groups": the new group is listed in 57 ms, with no scan.
+- Open the group page: title, goal, progress and Pay button in 1.3 s; payment history finished loading 0.1 s later (9 `eth_getLogs` calls).
+- Pay 0.25 USDC: confirmed by the network, and the payment appears in the list 12 ms later.
+- Reload the group page: the payment is shown from the saved history in 0.7 s using 1 `eth_getLogs` call.
+- New browser with empty storage, same wallet: the dashboard finds the wallet's groups by background scan in 2.8 s (30 calls) with no error.
+- A bare link with no creation hint on a new device: page content in 1.2 s, payment history 1.3 s later.
+- No page errors.
+
+Regression tests: BUG 1 (parallel windows, growth, per-endpoint limit learning, endpoint failover and cooldown, partial results kept, contiguous resume point, revisit fetches only new blocks, cursor saved after every chunk, no percentage counter) and BUG 2 (created group listed at once, case-insensitive address and id matching, cursor and groups saved per chunk, errors only when nothing loaded). A simulation of the four real endpoint behaviours finishes a 200,000-block scan in under 40 calls.
+
+## Mainnet preparation (29 October 2026)
+
+Nothing was deployed to or sent on Arc mainnet. Mainnet RPC calls were read-only (chain ID, block number, log queries on an address with no logs).
+
+| Check | Result |
+|-------|--------|
+| Mainnet facts vs Arc's official docs (chain 5042, four public RPC endpoints, explorer.arc.io, USDC `0x3600...0000` with 6 decimals) | Match. `bun run test:mainnet` (10 tests) fails if the code drifts from the documented values |
+| `VITE_SPLITPAY_CHAIN_ID=5042` build with a placeholder address and block taken from the environment | Targets chain 5042; mainnet banner and "real USDC" wording; no test-network wording or faucet; links on `explorer.arc.io`; scanner and failover use the four mainnet endpoints; the testnet contract address is not baked in |
+| `vercel.json` | No network, contract address or block any more: the Vercel dashboard variables control them |
+| Scanner against the four live mainnet endpoints | 200,000 blocks scanned in 29 requests (1.1 s) with failover. Primary and QuickNode accept up to 9,999 blocks, Blockdaemon 50,000, dRPC refuses log queries on its free plan. Arc's documented codes -32012 (range) and -32014 (retry) are handled |
+| `arc-forge test --network arc` (Arc Foundry v0.8.0-2, Arc's own runtime) | 70 of 70 passed |
+| Dry run then broadcast on Arc Testnet with `arc-forge script ... --account <keystore>` (the mainnet command shape) | Succeeded. Fresh copy at `0x9299b7b9091e41C9F52666Bc3d979c48eD5d7bc8`, tx `0x5f852c4109e298d4640f3aa3ba27e0117c0c6342f8c2ca365d35b03c18454ce3`, block 69704858. Dry run estimated about 0.04 USDC at roughly 44 Gwei |
+| Fresh copy vs the grant contract | Runtime code hashes identical; `usdc()` is the official USDC; `MAX_NAME_BYTES()` is 24 |
+| `arc-forge verify-contract` on the testnet explorer | "Pass - Verified" |
+| `bun run e2e:testnet` against the fresh copy | 31 of 31 checks passed (report in `docs/e2e-testnet-report.json`) |
+| Full suite: lint and types, `forge test` (70), `test:lib` 40, `test:landing` 18, `test:accounts` 10, `test:server` 39, `test:mainnet` 10, `test:security` 8 (real browser), `check:landing` 61, testnet and mainnet builds | All pass. The contract and `contracts/test/` are identical to `v1.0.0` |
+
+The fresh testnet copy is a verification artifact for the deployment procedure. The grant submission contract is still the one in the README, and no contract source changed.

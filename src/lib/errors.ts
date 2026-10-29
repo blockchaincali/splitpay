@@ -1,4 +1,12 @@
-import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from 'viem'
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  HttpRequestError,
+  SwitchChainError,
+  TimeoutError,
+  UserRejectedRequestError,
+  WebSocketRequestError,
+} from 'viem'
 import { fmtUsdcLabel } from './money'
 
 export interface FriendlyError {
@@ -7,8 +15,23 @@ export interface FriendlyError {
   message: string
 }
 
-/** Turn wallet, RPC and contract errors into plain-language text. */
-export function friendlyError(error: unknown): FriendlyError {
+const NETWORK_MESSAGE = 'Network issue. Check your connection and try again.'
+const SWITCH_MESSAGE = 'Your wallet could not switch to the Arc network. Add the network in your wallet, then try again.'
+
+/** True when the RPC endpoint itself could not be reached or did not answer in time. */
+export function isTransportError(error: unknown): boolean {
+  if (error instanceof BaseError) {
+    return !!error.walk((e) => e instanceof HttpRequestError || e instanceof TimeoutError || e instanceof WebSocketRequestError)
+  }
+  const text = (error instanceof Error ? error.message : String(error)).toLowerCase()
+  return /failed to fetch|networkerror|network request failed|load failed|timed out|took too long/.test(text)
+}
+
+/**
+ * Turn wallet, RPC and contract errors into plain-language text.
+ * `stage` lets a failed network switch be told apart from a failing RPC connection.
+ */
+export function friendlyError(error: unknown, opts: { stage?: string } = {}): FriendlyError {
   if (error instanceof BaseError) {
     if (error.walk((e) => e instanceof UserRejectedRequestError)) {
       return { cancelled: true, message: 'You cancelled the request in your wallet. Nothing was sent.' }
@@ -51,6 +74,9 @@ export function friendlyError(error: unknown): FriendlyError {
       }
     }
   }
+  if (error instanceof BaseError && error.walk((e) => e instanceof SwitchChainError))
+    return { cancelled: false, message: SWITCH_MESSAGE }
+  if (isTransportError(error)) return { cancelled: false, message: NETWORK_MESSAGE }
   const text = (error instanceof Error ? error.message : String(error)).toLowerCase()
   if (text.includes('user rejected') || text.includes('user denied'))
     return { cancelled: true, message: 'You cancelled the request in your wallet. Nothing was sent.' }
@@ -61,7 +87,6 @@ export function friendlyError(error: unknown): FriendlyError {
       cancelled: false,
       message: 'Your wallet does not have enough USDC for this payment plus network fees.',
     }
-  if (text.includes('timeout') || text.includes('network') || text.includes('fetch'))
-    return { cancelled: false, message: 'Network issue. Check your connection and try again.' }
+  if (opts.stage === 'switching') return { cancelled: false, message: SWITCH_MESSAGE }
   return { cancelled: false, message: 'Something went wrong. Nothing was charged unless a transaction link is shown.' }
 }

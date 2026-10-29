@@ -1,9 +1,13 @@
-import { useRef, useState } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { useReadContract, usePublicClient } from 'wagmi'
-import { BaseError, ContractFunctionRevertedError, getAbiItem, type Address, type Hex, type PublicClient } from 'viem'
+import { useMemo, useSyncExternalStore } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useReadContract } from 'wagmi'
+import { BaseError, ContractFunctionRevertedError, decodeEventLog, encodeEventTopics, getAbiItem, toHex, type Address, type Hex, type PublicClient } from 'viem'
 import { splitPayAbi } from './splitpayAbi'
 import { DEPLOY_BLOCK, SPLITPAY_ADDRESS, TARGET_CHAIN_ID } from './deployment'
+import { scanRange, type Window } from './historyScan'
+import { HistoryCache, type Contribution } from './historyStore'
+import { endpointClients, endpointUrls, headBlock } from './rpcClients'
+import { getCursor, getEndpointLimits, rememberGroups, saveCursor, saveEndpointLimits } from './localGroups'
 
 export interface Group {
   creator: Address
@@ -14,15 +18,7 @@ export interface Group {
   metadataHash: Hex
 }
 
-export interface Contribution {
-  contributor: Address
-  amount: bigint
-  totalAfter: bigint
-  name: string
-  txHash: Hex
-  blockNumber: bigint
-  logIndex: number
-}
+export type { Contribution } from './historyStore'
 
 export type GroupStatus = 'loading' | 'notfound' | 'error' | 'ready'
 
@@ -56,110 +52,161 @@ export function useGroup(groupId: Hex | undefined) {
 const contributionEvent = getAbiItem({ abi: splitPayAbi, name: 'ContributionReceived' })
 const createdEvent = getAbiItem({ abi: splitPayAbi, name: 'GroupCreated' })
 
-/** Fetch logs in block ranges, halving the range if the RPC rejects a wide request. */
-async function chunkedLogs<T>(
-  from: bigint,
-  to: bigint,
-  fetch: (a: bigint, b: bigint) => Promise<T[]>,
-  onProgress?: (done: bigint, total: bigint) => void,
-): Promise<T[]> {
-  const out: T[] = []
-  let size = 5000n
-  let start = from
-  while (start <= to) {
-    const end = start + size - 1n > to ? to : start + size - 1n
-    try {
-      out.push(...(await fetch(start, end)))
-      start = end + 1n
-      onProgress?.(start - from, to - from + 1n)
-    } catch (e) {
-      if (size <= 100n) throw e
-      size = size / 2n
-    }
+/** Per-endpoint range limits are remembered on this device (keyed by URL, same order as endpointClients()). */
+const memory = {
+  load: (i: number) => getEndpointLimits(endpointUrls()[i]),
+  save: (i: number, l: { maxOk: bigint; ceil: bigint | null }) => saveEndpointLimits(endpointUrls()[i], l),
+}
+
+/** Thrown when some block windows could not be read yet. Everything that did load has been kept and saved. */
+export class IncompleteScanError extends Error {
+  constructor(readonly failedWindows: number) {
+    super(`${failedWindows} block range(s) could not be read yet`)
+    this.name = 'IncompleteScanError'
+  }
+}
+
+export type GroupLogItem = { kind: 'created'; block: bigint } | { kind: 'contribution'; c: Contribution }
+
+/** One request returns both the creation event and the payments of a group (both have the group id as their first indexed topic). */
+async function fetchGroupLogs(client: PublicClient, groupId: Hex, w: Window): Promise<GroupLogItem[]> {
+  const topic0 = [
+    encodeEventTopics({ abi: [createdEvent] })[0],
+    encodeEventTopics({ abi: [contributionEvent] })[0],
+  ]
+  const logs = await client.request({
+    method: 'eth_getLogs',
+    params: [{ address: SPLITPAY_ADDRESS!, fromBlock: toHex(w.from), toBlock: toHex(w.to), topics: [topic0, groupId] }],
+  })
+  const out: GroupLogItem[] = []
+  for (const l of logs) {
+    if (l.blockNumber === null || l.transactionHash === null || l.logIndex === null) continue
+    const decoded = decodeEventLog({ abi: splitPayAbi, data: l.data, topics: l.topics })
+    const block = BigInt(l.blockNumber)
+    if (decoded.eventName === 'GroupCreated') out.push({ kind: 'created', block })
+    else if (decoded.eventName === 'ContributionReceived')
+      out.push({
+        kind: 'contribution',
+        c: {
+          contributor: decoded.args.contributor,
+          amount: decoded.args.amount,
+          totalAfter: decoded.args.totalCollected,
+          name: decoded.args.name,
+          txHash: l.transactionHash,
+          blockNumber: block,
+          logIndex: Number(BigInt(l.logIndex)),
+        },
+      })
   }
   return out
 }
 
-/** All payments for one group, rebuilt from ContributionReceived logs. */
-export function useContributions(groupId: Hex | undefined, collected: bigint | undefined, hintBlock: bigint | null) {
-  const client = usePublicClient({ chainId: TARGET_CHAIN_ID }) as PublicClient | undefined
-  const [progress, setProgress] = useState<number | null>(null)
-  const cache = useRef<{ cursor: bigint | null; items: Contribution[]; fullScan: boolean }>({
-    cursor: null,
-    items: [],
-    fullScan: false,
+async function scanGroup(cache: HistoryCache, groupId: Hex, from: bigint, to: bigint, record: boolean) {
+  const clients = endpointClients()
+  await runGroupScan({
+    cache,
+    from,
+    to,
+    record,
+    endpoints: clients.length,
+    fetchChunk: (w, i) => fetchGroupLogs(clients[i % clients.length], groupId, w),
   })
+}
 
-  // Re-runs whenever the onchain collected total changes, so new payments appear within seconds.
-  const query = useQuery({
-    queryKey: ['contributions', TARGET_CHAIN_ID, groupId, collected?.toString()],
-    enabled: Boolean(client && groupId && SPLITPAY_ADDRESS && collected !== undefined),
-    placeholderData: keepPreviousData,
-    retry: 2,
-    queryFn: async (): Promise<Contribution[]> => {
-      const c = cache.current
-      const head = await client!.getBlockNumber()
-      const load = async (from: bigint) => {
-        const logs = await chunkedLogs(
-          from,
-          head,
-          (a, b) =>
-            client!.getLogs({
-              address: SPLITPAY_ADDRESS,
-              event: contributionEvent,
-              args: { groupId },
-              fromBlock: a,
-              toBlock: b,
-              strict: true,
-            }),
-          (done, total) => setProgress(Number((done * 100n) / total)),
-        )
-        return logs.map(
-          (l): Contribution => ({
-            contributor: l.args.contributor,
-            amount: l.args.amount,
-            totalAfter: l.args.totalCollected,
-            name: l.args.name,
-            txHash: l.transactionHash,
-            blockNumber: l.blockNumber,
-            logIndex: l.logIndex,
-          }),
-        )
-      }
-      try {
-        const start = c.cursor !== null ? c.cursor + 1n : (hintBlock ?? DEPLOY_BLOCK)
-        let merged = c.cursor !== null ? [...c.items] : []
-        if (start <= head) merged = [...merged, ...(await load(start))]
-        const sum = merged.reduce((s, x) => s + x.amount, 0n)
-        // A quick scan from the creation block can miss history if the hint was wrong: rescan once from the contract's first block.
-        if (sum !== collected && !c.fullScan && start > DEPLOY_BLOCK) {
-          c.fullScan = true
-          merged = await load(DEPLOY_BLOCK)
-        }
-        const seen = new Set<string>()
-        merged = merged.filter((x) => {
-          const k = `${x.txHash}:${x.logIndex}`
-          if (seen.has(k)) return false
-          seen.add(k)
-          return true
-        })
-        c.items = merged
-        c.cursor = head
-        return merged
-      } finally {
-        setProgress(null)
-      }
+/** The history scan itself, separated from the network so it can be tested. Saves what it finds and the cursor after every chunk. */
+export async function runGroupScan(o: {
+  cache: HistoryCache
+  from: bigint
+  to: bigint
+  /** True when scanning forward from the saved cursor; false when repairing history before the starting point. */
+  record: boolean
+  endpoints: number
+  fetchChunk: (w: Window, endpoint: number) => Promise<GroupLogItem[]>
+  sleep?: (ms: number) => Promise<void>
+  now?: () => number
+}) {
+  const { cache, from, record } = o
+  const res = await scanRange<GroupLogItem>({
+    from,
+    to: o.to,
+    endpoints: o.endpoints,
+    fetchChunk: o.fetchChunk,
+    sleep: o.sleep,
+    now: o.now,
+    memory,
+    onChunk: ({ items, frontier }) => {
+      cache.merge(items.flatMap((x) => (x.kind === 'contribution' ? [x.c] : [])))
+      for (const x of items) if (x.kind === 'created') cache.noteCreated(x.block)
+      // Save after every chunk: a reload part way through resumes here instead of starting again.
+      if (record && frontier >= from) cache.advance(frontier)
+      else cache.persist()
     },
   })
+  if (!res.complete) throw new IncompleteScanError(res.failed.length || 1)
+}
 
+/**
+ * Bring one group's payment history up to date. Starts after the saved cursor; with nothing saved it starts at the
+ * creation block (the ?b= hint, or the block of a GroupCreated event already seen), falling back to the contract's first block.
+ * If the payments found add up to less than the onchain total, the history before the starting point is read once to repair it.
+ */
+export function syncGroupHistory(cache: HistoryCache, groupId: Hex, hint: bigint | null, collected: bigint | undefined) {
+  return cache.exclusive(async () => {
+    const begin = async () => {
+      const head = await headBlock()
+      const first = cache.cursor !== null ? cache.cursor + 1n : (cache.createdBlock ?? hint ?? DEPLOY_BLOCK)
+      const from = first < DEPLOY_BLOCK ? DEPLOY_BLOCK : first
+      if (cache.cursor === null) cache.noteStart(from)
+      if (from <= head) await scanGroup(cache, groupId, from, head, true)
+      return head
+    }
+    await begin()
+    if (collected !== undefined && cache.total() < collected) {
+      // The chain may simply have moved on since `collected` was read: look at the newest blocks again first.
+      await begin()
+      const floor = cache.floor
+      if (cache.total() < collected && floor !== null && floor > DEPLOY_BLOCK) {
+        await scanGroup(cache, groupId, DEPLOY_BLOCK, floor - 1n, false)
+        cache.noteStart(DEPLOY_BLOCK)
+        cache.persist()
+      }
+    }
+  })
+}
+
+/**
+ * All payments for one group. The saved history appears at once; new blocks are read in the background (several windows at
+ * a time) and never block the page. A failed window is retried on another endpoint and nothing already loaded is dropped.
+ */
+export function useContributions(groupId: Hex | undefined, collected: bigint | undefined, hintBlock: bigint | null) {
+  const cache = useMemo(() => (groupId ? new HistoryCache(groupId) : null), [groupId])
+  const items = useSyncExternalStore(
+    cache ? cache.subscribe : () => () => undefined,
+    () => (cache ? cache.items() : EMPTY),
+  )
+  const query = useQuery({
+    // Re-runs when the onchain total changes, so a new payment shows up within seconds (a short, resumed scan).
+    queryKey: ['group-history', TARGET_CHAIN_ID, groupId?.toLowerCase(), collected?.toString() ?? ''],
+    enabled: Boolean(cache && SPLITPAY_ADDRESS),
+    retry: 8,
+    retryDelay: (n) => Math.min(15_000, 800 * 2 ** n),
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      await syncGroupHistory(cache!, groupId!, hintBlock, collected)
+      return true
+    },
+  })
   return {
-    items: query.data ?? [],
-    syncing: query.isFetching,
-    progress,
-    error: query.isError ? 'Could not load payment history. Retrying shortly.' : null,
+    items,
+    /** True while reading blocks, including the wait between retries. */
+    syncing: query.isFetching || query.failureCount > 0,
+    /** Only when nothing at all could be loaded. A partial list is shown as is. */
+    error: query.isError && items.length === 0 ? 'Could not load payment history yet. We will keep trying.' : null,
     resync: query.refetch,
   }
 }
+
+const EMPTY: Contribution[] = []
 
 export interface CreatedGroup {
   groupId: Hex
@@ -170,39 +217,73 @@ export interface CreatedGroup {
   blockNumber: bigint
 }
 
-/** Groups created by one wallet, from GroupCreated logs (creator is an indexed topic). */
-export async function fetchCreatedGroups(
-  client: PublicClient,
-  creator: Address,
-  from: bigint,
-  onProgress?: (pct: number) => void,
-): Promise<{ groups: CreatedGroup[]; head: bigint }> {
-  if (!SPLITPAY_ADDRESS) return { groups: [], head: from }
-  const head = await client.getBlockNumber()
-  if (from > head) return { groups: [], head }
-  const logs = await chunkedLogs(
+/**
+ * Find the groups created by one wallet (creator is an indexed topic, compared without regard to case by the node).
+ * Resumes from the saved cursor, reads several windows at once, saves what it finds and the cursor after EVERY chunk,
+ * and throws IncompleteScanError (after keeping everything loaded) if some windows still failed.
+ */
+export async function syncMyGroups(creator: Address, onChange?: () => void, signal?: AbortSignal): Promise<void> {
+  if (!SPLITPAY_ADDRESS) return
+  const clients = endpointClients()
+  const head = await headBlock(clients)
+  const cursor = getCursor(creator)
+  const from = cursor !== null ? cursor + 1n : DEPLOY_BLOCK
+  if (from > head) return
+  await scanMyGroups({
+    creator,
     from,
-    head,
-    (a, b) =>
-      client.getLogs({
+    to: head,
+    endpoints: clients.length,
+    signal,
+    onChange,
+    fetchChunk: async (w, i) => {
+      const logs = await clients[i % clients.length].getLogs({
         address: SPLITPAY_ADDRESS,
         event: createdEvent,
         args: { creator },
-        fromBlock: a,
-        toBlock: b,
+        fromBlock: w.from,
+        toBlock: w.to,
         strict: true,
-      }),
-    (done, total) => onProgress?.(Number((done * 100n) / total)),
-  )
-  return {
-    head,
-    groups: logs.map((l) => ({
-      groupId: l.args.groupId,
-      recipient: l.args.recipient,
-      target: l.args.target,
-      deadline: BigInt(l.args.deadline),
-      metadataHash: l.args.metadataHash,
-      blockNumber: l.blockNumber,
-    })),
-  }
+      })
+      return logs.map((l) => ({
+        groupId: l.args.groupId,
+        recipient: l.args.recipient,
+        target: l.args.target,
+        deadline: BigInt(l.args.deadline),
+        metadataHash: l.args.metadataHash,
+        blockNumber: l.blockNumber,
+      }))
+    },
+  })
+}
+
+/** The scan itself, separated from the network so it can be tested: saves groups and the cursor after every chunk. */
+export async function scanMyGroups(o: {
+  creator: Address
+  from: bigint
+  to: bigint
+  endpoints: number
+  fetchChunk: (w: Window, endpoint: number) => Promise<CreatedGroup[]>
+  onChange?: () => void
+  signal?: AbortSignal
+  sleep?: (ms: number) => Promise<void>
+  now?: () => number
+}): Promise<void> {
+  const res = await scanRange<CreatedGroup>({
+    from: o.from,
+    to: o.to,
+    endpoints: o.endpoints,
+    signal: o.signal,
+    sleep: o.sleep,
+    now: o.now,
+    memory,
+    fetchChunk: o.fetchChunk,
+    onChunk: ({ items, frontier }) => {
+      if (items.length) rememberGroups(o.creator, items.map((g) => ({ groupId: g.groupId, block: g.blockNumber.toString() })))
+      const saved = getCursor(o.creator)
+      if (frontier >= o.from && (saved === null || frontier > saved)) saveCursor(o.creator, frontier)
+      o.onChange?.()
+    },
+  })
+  if (!res.complete) throw new IncompleteScanError(res.failed.length || 1)
 }

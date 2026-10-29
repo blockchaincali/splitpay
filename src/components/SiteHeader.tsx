@@ -35,7 +35,7 @@ const linkClass = 'inline-flex min-h-[44px] items-center rounded-xl px-3 text-sm
  * Mobile: brand, compact wallet button and a menu button (disclosure pattern: aria-expanded + aria-controls,
  * Escape and outside click close it, and it closes after a choice, a route change, or growing to desktop width).
  */
-export function SiteHeader({ wallet, walletCompact }: { wallet: ReactNode; walletCompact: ReactNode }) {
+export function SiteHeader({ wallet, walletCompact, extraItem }: { wallet: ReactNode; walletCompact: ReactNode; extraItem?: { route: string; label: string } }) {
   // The menu is open only for the page it was opened on, so any navigation closes it without an effect.
   const { path } = useLocation()
   const [openPath, setOpenPath] = useState<string | null>(null)
@@ -94,6 +94,11 @@ export function SiteHeader({ wallet, walletCompact }: { wallet: ReactNode; walle
               {item.label}
             </NavAnchor>
           ))}
+          {extraItem ? (
+            <NavAnchor to={{ route: extraItem.route }} className={linkClass}>
+              {extraItem.label}
+            </NavAnchor>
+          ) : null}
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
@@ -133,6 +138,13 @@ export function SiteHeader({ wallet, walletCompact }: { wallet: ReactNode; walle
               </NavAnchor>
             </li>
           ))}
+          {extraItem ? (
+            <li>
+              <NavAnchor to={{ route: extraItem.route }} className={`${linkClass} w-full !min-h-[48px] text-base`} onNavigate={close}>
+                {extraItem.label}
+              </NavAnchor>
+            </li>
+          ) : null}
           <li className="pt-2">
             <NavAnchor to={{ route: ROUTE.create }} className="btn-primary" onNavigate={close}>
               <Plus className="size-4" aria-hidden="true" /> Create a group

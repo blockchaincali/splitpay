@@ -60,7 +60,6 @@ Nothing in this pack is labelled "live in production". There is no production de
 | Yellow Card collections and payouts | Request signing and webhook verification written to their published format and unit tested. **No call made to Yellow Card.** | Sandbox credentials, then KYB, IP allow-listing and a commercial agreement. Arc support as a settlement network unconfirmed |
 | Circle user-controlled or passkey wallets | Not integrated | Circle Console configuration (App ID or client key tied to the deployed hostname) |
 | Real email delivery | Adapter for a transactional provider written, never run | Provider account and a verified sending domain |
-| Google sign-in | Flow written, disabled | OAuth client credentials |
 | Circle onramp | Not integrated | Console key; availability for Nigerian users unconfirmed |
 | Mainnet deployment | None | Owner's wallet, independent audit decision, explicit approval (see `docs/MAINNET_CHECKLIST.md`) |
 
@@ -104,7 +103,7 @@ Design rules that are enforced in code and tests:
 | Browser, real app on Arc Testnet | 17 of 17 on two runs, plus a guest-payment run on the v1 release build and on `consumer-v2` | `docs/TEST_EVIDENCE.md`, `docs/ui-verification/` |
 | Lint, types, production build | Clean on both refs | `bun run check && bun run build` |
 
-Not tested: real email delivery, Google sign-in, anything against Yellow Card or Circle services, load, third-party wallet pickers, mainnet.
+Not tested: real email delivery, anything against Yellow Card or Circle services, load, third-party wallet pickers, mainnet.
 
 ## 6. Current limitations
 

@@ -1,3 +1,4 @@
+import { IS_MAINNET } from './deployment'
 import { navigate } from './router'
 
 /** Ids of the landing-page sections. The nav, footer and Home all use these, so a link can never point at a missing section. */
@@ -29,7 +30,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'How it works', to: { section: SECTION.how } },
   { label: 'Features', to: { section: SECTION.features } },
-  { label: 'Testnet', to: { section: SECTION.testnet } },
+  { label: IS_MAINNET ? 'Network' : 'Testnet', to: { section: SECTION.testnet } },
   { label: 'My groups', to: { route: ROUTE.groups } },
 ]
 

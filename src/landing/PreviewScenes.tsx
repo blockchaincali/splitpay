@@ -202,7 +202,7 @@ export function ConnectScene() {
       </div>
 
       <ol className="demo-in card-inner grid gap-3" style={at(2.3)} aria-label="Group creation progress">
-        <StatusRow label="Switch your wallet to Arc Testnet" from={2.6} to={3.4} />
+        <StatusRow label="Switch your wallet to the Arc network" from={2.6} to={3.4} />
         <StatusRow label="Confirm in your wallet" from={3.4} to={4.6} />
         <StatusRow label="Waiting for the network to confirm" from={4.6} to={5.6} />
         <StatusRow label="Your group is live" from={5.6} to={5.7} last />

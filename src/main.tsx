@@ -25,6 +25,7 @@ import '@fontsource-variable/space-grotesk'
 import '@fontsource-variable/jetbrains-mono'
 import App from './App'
 import { installShareSync } from './lib/share'
+import { SessionProvider } from './account/SessionProvider'
 import './index.css'
 
 installShareSync()
@@ -83,7 +84,9 @@ createRoot(document.getElementById('root')!).render(
             '--ck-accent-color': '#12b3a4',
           }}
         >
-          <App />
+          <SessionProvider>
+            <App />
+          </SessionProvider>
           <StudioWatermark />
           <Toaster position="top-center" />
         </ConnectKitProvider>

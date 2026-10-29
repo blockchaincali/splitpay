@@ -50,3 +50,26 @@ bun run contracts:test
 ```
 
 If the contract changes: `forge build`, regenerate `src/lib/splitpayAbi.ts` from `contracts/out/SplitPayGroups.sol/SplitPayGroups.json`, redeploy, update `.env`.
+
+## consumer-v2 (branch)
+
+- Frozen release: tag `v1.0.0` on `main`. Never edit `contracts/SplitPayGroups.sol` or redeploy it from this branch (`git diff v1.0.0 -- contracts/SplitPayGroups.sol contracts/test` must stay empty).
+- API server in `server/` (Bun, SQLite in WAL mode, one process owns the file). Dev: `bun run server` on 3001, Vite proxies `/api`. Never delete and rebuild `server/data/*.db` to "fix" an integrity error: stop and tell the user.
+- Truth rule: only Arc decides whether someone paid. Sandbox NGN intents are always `settledOnArc: false` and `countsTowardCollected: false`. Do not change that without a real provider integration and legal sign-off.
+- Honest labels: every integration is `live`, `sandbox`, `needs-credentials` or `planned` (`server/payments.ts`, shown on the Account page). Do not describe sandbox flows as live.
+- SplitPay testnet wallet (`src/wallet/embedded.ts`) is testnet only and disabled on mainnet. Do not market it as production custody.
+- Secrets: provider keys live in server environment variables only. Never ask for them in chat, never put them in `VITE_` variables.
+- Docs: `docs/V2_ARCHITECTURE.md`, `docs/INTEGRATIONS_RESEARCH.md`, `docs/GRANT_APPLICATION.md`, `docs/TEST_EVIDENCE.md`.
+
+## Wallet-first rules (29 October 2026)
+
+- A connected wallet is enough for everything: create, pay, "Your groups". Never gate those behind sign-in.
+- Account features (sign-in, invitations, reminders, saved groups, NGN sandbox) render only if `useAccountsAvailable()` is true: build flag `VITE_ACCOUNTS_ENABLED=true` AND `GET /api/health` returns `{ ok: true, service: "splitpay-api" }`. Wrap any new account-only page in `AccountsGate`. `bun run test:accounts` enforces this.
+- No Google sign-in. Do not reintroduce it without a configured OAuth client.
+- The dev proxy keeps `/api`; the API server strips it. `src/tracing.ts` and `src/console-capture.ts` are replaced by stubs in production builds (see `vite.config.ts`); do not weaken that.
+
+## Data loading rules (29 October 2026)
+
+- Pages render from `getGroup` / local lists first. Log scans (`src/lib/historyScan.ts`) run in the background, several windows at once, resumable, with the cursor saved after every chunk. Never block a page on a scan and never show a percentage.
+- Do not hardcode RPC range limits: public endpoints differ and change. The scanner learns per endpoint and the app stores what it learned (`rpc-limits:<url>`).
+- A group is saved locally (`rememberCreatedGroup`) the moment its creation is confirmed. Compare addresses with `sameAddress` and group ids in lower case.

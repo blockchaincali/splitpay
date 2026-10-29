@@ -1,5 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useAccount } from 'wagmi'
+import { sameAddress } from '@/lib/address'
+import { useAccountsAvailable } from '@/account/availability'
 import { AlertTriangle, ArrowLeft, ShieldCheck } from 'lucide-react'
 import type { Hex } from 'viem'
 import { useGroup, useContributions } from '@/lib/groupData'
@@ -18,6 +20,7 @@ const ID_RE = /^0x[0-9a-fA-F]{64}$/
 export function GroupPage({ id }: { id: string }) {
   const { search } = useLocation()
   const { address } = useAccount()
+  const { available: accountsOn } = useAccountsAvailable()
   const valid = ID_RE.test(id)
   const groupId = valid ? (id as Hex) : undefined
   const decoded = useMemo(() => decodeMeta(search.get('d')), [search])
@@ -25,7 +28,7 @@ export function GroupPage({ id }: { id: string }) {
   const hint = hintParam && /^\d+$/.test(hintParam) ? BigInt(hintParam) : null
 
   const { status, group, refetch } = useGroup(groupId)
-  const { items, syncing, progress, error, resync } = useContributions(groupId, group?.collected, hint)
+  const { items, syncing, error, resync } = useContributions(groupId, group?.collected, hint)
   const onPaid = useCallback(() => {
     void refetch()
     void resync()
@@ -44,7 +47,7 @@ export function GroupPage({ id }: { id: string }) {
 
   const verify = verifyMeta(decoded, group)
   const meta = verify === 'verified' ? decoded!.meta : null
-  const isCreator = address?.toLowerCase() === group.creator.toLowerCase()
+  const isCreator = sameAddress(address, group.creator)
 
   return (
     <div className="grid gap-5">
@@ -97,13 +100,16 @@ export function GroupPage({ id }: { id: string }) {
 
         <div className="grid gap-5">
           <PayPanel groupId={groupId!} group={group} meta={meta} onPaid={onPaid} />
+          {isCreator && accountsOn ? (
+            <button type="button" className="btn-ghost" onClick={() => navigate(`/g/${groupId}/manage${window.location.search}`)}>People and reminders</button>
+          ) : null}
           {isCreator ? (
             <ShareLinkCard path={groupPath(groupId!, decoded && verify === 'verified' ? decoded.text : undefined, hint ?? undefined)} title={meta?.t ?? 'Payment group'} />
           ) : null}
         </div>
       </div>
 
-      <ReceiptList items={items} me={address} syncing={syncing} progress={progress} error={error} />
+      <ReceiptList items={items} me={address} syncing={syncing} error={error} />
     </div>
   )
 }

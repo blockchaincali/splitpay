@@ -67,5 +67,13 @@ export default defineConfig({
   server: {
     allowedHosts: true,
     cors: true,
+    proxy: {
+      // The browser only reaches Vite; the API server listens on 3001 and strips the /api prefix itself (see server/index.ts),
+      // exactly as it does in production, so dev and production take the same path.
+      '/api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+    },
   },
 })

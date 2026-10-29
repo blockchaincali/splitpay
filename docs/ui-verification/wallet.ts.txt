@@ -4,12 +4,12 @@ import { arcTestnet } from 'viem/chains'
 import type { BrowserContext } from 'playwright-core'
 
 const rpc = 'https://rpc.testnet.arc.io'
-export const pub = createPublicClient({ chain: arcTestnet, transport: http(rpc) })
+export const pub = createPublicClient({ chain: arcTestnet, transport: http(rpc, { retryCount: 8, retryDelay: 1500 }) })
 
 /** Installs a throwaway-key EIP-1193 wallet into every page of the context. Testnet only. */
 export async function installWallet(ctx: BrowserContext, key: Hex, log: string[]) {
   const account = privateKeyToAccount(key)
-  const wallet = createWalletClient({ account, chain: arcTestnet, transport: http(rpc) })
+  const wallet = createWalletClient({ account, chain: arcTestnet, transport: http(rpc, { retryCount: 8, retryDelay: 1500 }) })
   await ctx.exposeFunction('__rpc', async (method: string, params: unknown[]) => {
     switch (method) {
       case 'eth_requestAccounts':
