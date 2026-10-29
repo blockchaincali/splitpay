@@ -97,6 +97,13 @@ export function Home() {
   }, [])
 
   const explorerUrl = SPLITPAY_ADDRESS ? buildAddressExplorerUrl(TARGET_CHAIN_ID, SPLITPAY_ADDRESS) : null
+  /** Link to the deployed contract on this network's explorer (explorer.arc.io on mainnet). Shown on both networks. */
+  const contractLink = explorerUrl ? (
+    <a className="btn-ghost btn-sm" href={explorerUrl} target="_blank" rel="noopener noreferrer">
+      View the contract <ExternalLink className="size-4" aria-hidden="true" />
+      <span className="sr-only"> (opens in a new tab)</span>
+    </a>
+  ) : null
 
   return (
     <div className="grid gap-16 sm:gap-20">
@@ -159,9 +166,12 @@ export function Home() {
       <Section id={SECTION.testnet} eyebrow={IS_MAINNET ? 'Network' : 'Testnet'} title={IS_MAINNET ? `You are on ${TARGET_CHAIN.name}` : `SplitPay runs on ${TARGET_CHAIN.name}`}>
         <div className="card" style={{ background: IS_MAINNET ? 'var(--warn-soft)' : 'var(--surface)' }}>
           {IS_MAINNET ? (
-            <p style={{ color: 'var(--warn)' }}>
-              Payments use real USDC and cannot be reversed. Check the amount and the receiving wallet before you pay.
-            </p>
+            <>
+              <p style={{ color: 'var(--warn)' }}>
+                Payments use real USDC and cannot be reversed. Check the amount and the receiving wallet before you pay.
+              </p>
+              {contractLink ? <div className="mt-5 flex flex-wrap gap-3">{contractLink}</div> : null}
+            </>
           ) : (
             <>
               <p className="max-w-prose" style={{ color: 'var(--ink-2)' }}>
@@ -172,12 +182,7 @@ export function Home() {
                   Get test USDC <ExternalLink className="size-4" aria-hidden="true" />
                   <span className="sr-only"> (opens in a new tab)</span>
                 </a>
-                {explorerUrl ? (
-                  <a className="btn-ghost btn-sm" href={explorerUrl} target="_blank" rel="noopener noreferrer">
-                    View the contract <ExternalLink className="size-4" aria-hidden="true" />
-                    <span className="sr-only"> (opens in a new tab)</span>
-                  </a>
-                ) : null}
+                {contractLink}
               </div>
             </>
           )}

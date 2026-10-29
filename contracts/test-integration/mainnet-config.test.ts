@@ -122,6 +122,19 @@ describe('VITE_SPLITPAY_CHAIN_ID=5042 targets Arc mainnet using the environment 
     expect(markup.includes('explorer.testnet.arc.io')).toBe(false)
     expect(markup.match(/https:\/\/faucet[^"]*/)?.[0] ?? null).toBeNull()
   })
+
+  test('the Network section links to the contract on explorer.arc.io, under the real-USDC warning', () => {
+    const section = m.home.slice(m.home.indexOf('id="testnet"'), m.home.indexOf('aria-labelledby="cta-title"'))
+    const link = `https://explorer.arc.io/address/${FAKE}`
+    expect(section).toContain(`href="${link}"`)
+    expect(section).toContain('View the contract')
+    // the warning comes first, the link after it
+    expect(section.indexOf('cannot be reversed')).toBeGreaterThan(-1)
+    expect(section.indexOf('cannot be reversed')).toBeLessThan(section.indexOf(link))
+    // opens safely in a new tab
+    expect(section).toMatch(/href="https:\/\/explorer\.arc\.io\/address\/[^"]+" target="_blank" rel="noopener noreferrer"/)
+    expect(section).not.toContain('explorer.testnet.arc.io')
+  })
 })
 
 describe('with no network setting the build stays on Arc Testnet', () => {
@@ -132,6 +145,9 @@ describe('with no network setting the build stays on Arc Testnet', () => {
     expect(t.scanEndpoints).toEqual(DOCS.testnet.rpc)
     expect(t.txUrl).toBe('https://explorer.testnet.arc.io/tx/0xabc')
     expect(/test USDC/.test(`${t.home} ${t.footer}`)).toBe(true)
+    const section = t.home.slice(t.home.indexOf('id="testnet"'), t.home.indexOf('aria-labelledby="cta-title"'))
+    expect(section).toContain(`href="https://explorer.testnet.arc.io/address/${FAKE}"`)
+    expect(section).toContain('Get test USDC')
   })
 })
 
