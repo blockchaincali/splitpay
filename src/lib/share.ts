@@ -1,4 +1,4 @@
-const STUDIO_ORIGINS = ['https://studio.arc.io', 'https://studio-staging.arc.io']
+export const STUDIO_ORIGINS = ['https://studio.arc.io', 'https://studio-staging.arc.io']
 const HANDSHAKE_TIMEOUT_MS = 1500
 const trimSlash = (url: string) => url.replace(/\/+$/, '')
 const ownBase = () =>

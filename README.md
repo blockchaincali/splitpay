@@ -1,6 +1,6 @@
 # SplitPay
 
-> Branch `consumer-v2`. The frozen Arc Microgrants release is tag `v1.0.0` (see `docs/RELEASE.md`). The deployed contract is the same in both.
+> Branch `consumer-v2` (this branch adds accounts, invitations, reminders and the NGN sandbox on top of the release line). The frozen Arc Microgrants release is tag `v1.0.0`; `v1.0.1` adds hosting config and documents. The deployed contract is the same everywhere. Release steps and what needs the owner: `docs/RELEASE_CHECKLIST.md`.
 
 SplitPay helps friends, roommates and organisers collect shared expenses in USDC. Create a payment group, share one link (for example in WhatsApp), and watch contributions arrive. Payments go straight from each contributor to the receiving wallet: SplitPay never holds the money.
 
@@ -9,7 +9,9 @@ Built with [Arc Studio](https://studio.arc.io)
 ## Grant submission (Arc Microgrants Round 2)
 
 - Arc Studio project URL: _paste your Arc Studio project URL here_
-- Network: Arc Testnet (chain ID 5042002). Not deployed to mainnet; see `docs/MAINNET_CHECKLIST.md` for the readiness checklist and independent deployment steps.
+- Live app URL: _paste your Vercel URL here_
+- Mainnet: **not deployed.** No real USDC has moved. The Arc Microgrants (Built with Arc Studio) round requires a mainnet deployment; see `docs/submission/ARC_MICROGRANTS_SUBMISSION.md`.
+- Network: Arc Testnet (chain ID 5042002); see `docs/MAINNET_CHECKLIST.md` for the readiness checklist and independent deployment steps.
 - Contract: `SplitPayGroups` at `0xd7f9c3823e81fe27300693c060a6418ad3eed806` ([explorer](https://explorer.testnet.arc.io/address/0xd7f9c3823e81fe27300693c060a6418ad3eed806))
 - Deployment transaction: `0x7bf806f4ab7864f97b0a643b0f8f1a90b73ae8cf7d680da2249673f993c028cc`, block 69502501
 - Contract tests: 70 passing (unit, bad-token, fuzz and invariant tests)
