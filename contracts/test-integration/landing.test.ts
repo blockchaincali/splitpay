@@ -5,7 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 
 const ROOT = join(import.meta.dir, '..', '..')
-const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
+/** Source text with line endings normalised, so the checks pass whether git checked the files out as LF or CRLF. */
+const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8').split('\r\n').join('\n')
 const landingFiles = readdirSync(join(ROOT, 'src/landing')).map((f) => `src/landing/${f}`)
 
 /** The pages read window.location and matchMedia when they render; a minimal stand-in is enough for static markup. */
