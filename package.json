@@ -14,7 +14,7 @@
     "check": "bash scripts/check.sh",
     "contracts:build": "forge build",
     "contracts:test": "forge test",
-    "test:lib": "bun test contracts/test-integration/lib.test.ts contracts/test-integration/rpc-errors.test.ts",
+    "test:lib": "bun test contracts/test-integration/lib.test.ts contracts/test-integration/rpc-errors.test.ts contracts/test-integration/csp.test.ts",
     "test:security": "bun test contracts/test-integration/security.test.ts",
     "e2e:testnet": "bun run contracts/test-integration/e2e-testnet.ts"
   },
