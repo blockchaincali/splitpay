@@ -12,6 +12,8 @@
     "lint": "oxlint --type-aware src scripts --fix; s=$?; oxlint --fix .; exit $((s>0?s:$?))",
     "typecheck": "tsc --noEmit",
     "check": "bash scripts/check.sh",
+    "test:landing": "bun test contracts/test-integration/landing.test.ts",
+    "check:landing": "node scripts/landing-check/run.mjs",
     "contracts:build": "forge build",
     "contracts:test": "forge test",
     "test:lib": "bun test contracts/test-integration/lib.test.ts",
