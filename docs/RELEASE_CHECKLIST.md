@@ -17,7 +17,7 @@ Prepared 28 October 2026. Legend: **Done** = finished and verified here. **You**
 | 9 | Fill your builder profile and applicant details | Personal details | Form |
 | 10 | Re-read the round's rules on the official page and submit | Only you can submit | Submission |
 | 11 | For Circle Developer Grants: complete the applicant, team, amount and traction sections and apply through Circle's portal | Personal and commercial details | Second application |
-| 12 | If you later pursue them: create Circle Console, Yellow Card sandbox, mail provider and Google OAuth accounts and put the keys in server environment variables yourself | Your accounts. Never paste keys into chat | v2 integrations |
+| 12 | If you later pursue them: create Circle Console, Yellow Card sandbox, and mail provider accounts and put the keys in server environment variables yourself | Your accounts. Never paste keys into chat | v2 integrations |
 
 ## A. Repository and GitHub
 

@@ -48,7 +48,7 @@ Components that exist today on `consumer-v2`: static app, single API process wit
   - Rate limits per email, per IP and per device, enforced in a shared store (Redis or Postgres), not in process memory as today.
   - Generic responses so the sign-in form never reveals whether an address has an account.
   - Plain text and HTML templates; the code is the only secret in the message; no links that log in directly (avoids link-scanner consumption).
-- **Optional second methods.** Google sign-in (OIDC with PKCE, state, `email_verified` required) once an OAuth client exists; passkeys for returning users.
+- **Optional second methods.** passkeys for returning users. (Google sign-in was built and then removed from the app in October 2026 because it was never configured; reintroduce it only with a real OAuth client.)
 - **Sessions.** Random 256-bit token, stored hashed, `HttpOnly`, `Secure`, `SameSite=Lax`, rotating on sign-in, revocable list in the account page. JSON-only mutating requests plus `SameSite` as CSRF defence (current design), with an `Origin` allowlist added at the edge.
 - **Step-up.** Sensitive actions (change email, link or unlink a wallet, export data, delete account) require a fresh email code.
 - **Recovery.** Email is the recovery channel for the SplitPay account only. It cannot recover a wallet (section 4).
@@ -199,4 +199,3 @@ Evidence: the browser journey `docs/ui-verification/v1-journey.ts.txt` pays as a
 | NGN collection | Sandbox only, demo rate | Section 6 gate |
 | NGN payout | Sandbox only | Section 6 gate |
 | Reminders | Manual, rate-limited, dev mail | Real mail, scheduler, unsubscribe handling |
-| Google sign-in | Disabled (no credentials) | OAuth client, privacy notice |

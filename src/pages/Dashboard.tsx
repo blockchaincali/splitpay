@@ -16,6 +16,7 @@ import { buildShareLink } from '@/lib/share'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useSession } from '@/account/SessionProvider'
+import { useAccountsAvailable } from '@/account/availability'
 
 export function Dashboard() {
   const { address, isConnected } = useAccount()
@@ -226,8 +227,10 @@ interface ServerGroupsRes {
 
 /** Groups saved to the signed-in account. Available on any device after signing in. */
 function ServerGroups() {
+  const { available } = useAccountsAvailable()
   const { user } = useSession()
-  const q = useQuery({ queryKey: ['server-groups'], queryFn: () => api.get<ServerGroupsRes>('/groups'), enabled: Boolean(user), retry: 1 })
+  const q = useQuery({ queryKey: ['server-groups'], queryFn: () => api.get<ServerGroupsRes>('/groups'), enabled: available && Boolean(user), retry: 1 })
+  if (!available) return null
   if (!user) {
     return (
       <Notice tone="teal" title="Keep your groups on every device">

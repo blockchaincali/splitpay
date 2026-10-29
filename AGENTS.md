@@ -60,3 +60,10 @@ If the contract changes: `forge build`, regenerate `src/lib/splitpayAbi.ts` from
 - SplitPay testnet wallet (`src/wallet/embedded.ts`) is testnet only and disabled on mainnet. Do not market it as production custody.
 - Secrets: provider keys live in server environment variables only. Never ask for them in chat, never put them in `VITE_` variables.
 - Docs: `docs/V2_ARCHITECTURE.md`, `docs/INTEGRATIONS_RESEARCH.md`, `docs/GRANT_APPLICATION.md`, `docs/TEST_EVIDENCE.md`.
+
+## Wallet-first rules (29 October 2026)
+
+- A connected wallet is enough for everything: create, pay, "Your groups". Never gate those behind sign-in.
+- Account features (sign-in, invitations, reminders, saved groups, NGN sandbox) render only if `useAccountsAvailable()` is true: build flag `VITE_ACCOUNTS_ENABLED=true` AND `GET /api/health` returns `{ ok: true, service: "splitpay-api" }`. Wrap any new account-only page in `AccountsGate`. `bun run test:accounts` enforces this.
+- No Google sign-in. Do not reintroduce it without a configured OAuth client.
+- The dev proxy keeps `/api`; the API server strips it. `src/tracing.ts` and `src/console-capture.ts` are replaced by stubs in production builds (see `vite.config.ts`); do not weaken that.

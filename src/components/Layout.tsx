@@ -3,6 +3,7 @@ import { useAccount } from 'wagmi'
 import { useModal } from 'connectkit'
 import { Wallet } from 'lucide-react'
 import { useSession } from '@/account/SessionProvider'
+import { useAccountsAvailable } from '@/account/availability'
 import { EMBEDDED_RDNS } from '@/wallet/embedded'
 import { openConnectChooser, openDialog } from '@/wallet/walletUi'
 import { WalletDialogs } from '@/wallet/WalletUI'
@@ -35,7 +36,8 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, loading } = useSession()
-  const extraItem = loading ? undefined : { route: user ? '/account' : '/signin', label: user ? 'Account' : 'Sign in' }
+  const { available } = useAccountsAvailable()
+  const extraItem = !available || loading ? undefined : { route: user ? '/account' : '/signin', label: user ? 'Account' : 'Sign in' }
   return (
     <div className="min-h-[calc(100dvh-80px)] pb-6">
       <a

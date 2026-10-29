@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Mail } from 'lucide-react'
-import { api, ApiError, type Integration } from '@/api/client'
+import { api, ApiError } from '@/api/client'
 import { useSession } from '@/account/SessionProvider'
 import { navigate, useLocation } from '@/lib/router'
 import { Notice, Spinner } from '@/components/ui'
@@ -20,9 +20,6 @@ export function SignIn() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [delivery, setDelivery] = useState<string>('')
-
-  const integrations = useQuery({ queryKey: ['integrations'], queryFn: () => api.get<{ integrations: Integration[] }>('/integrations/status') })
-  const google = integrations.data?.integrations.find((i) => i.id === 'google-auth')
 
   const outbox = useQuery({
     queryKey: ['outbox', email],
@@ -113,10 +110,6 @@ export function SignIn() {
         ) : null}
       </form>
 
-      <div className="card-inner text-sm">
-        <button type="button" className="btn-ghost" disabled aria-describedby="google-note">Continue with Google</button>
-        <p id="google-note" className="hint">{google ? 'Google sign-in is not set up on this server yet.' : 'Checking sign-in options…'}</p>
-      </div>
     </div>
   )
 }

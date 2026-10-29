@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
+import { useAccountsAvailable } from '@/account/availability'
 import { openConnectChooser } from '@/wallet/walletUi'
 import { isAddress } from 'viem'
 import { CheckCircle2 } from 'lucide-react'
@@ -30,6 +31,7 @@ function parseAmt(text: string): bigint | null {
 
 export function CreateGroup() {
   const { address, isConnected, chainId } = useAccount()
+  const { available: accountsOn } = useAccountsAvailable()
   const { step, error, txHash, result, create, reset } = useCreateGroup()
   const now = useNow(30000)
   const [title, setTitle] = useState('')
@@ -98,11 +100,13 @@ export function CreateGroup() {
           <div className="mt-2"><TxLink hash={result.txHash}>View creation receipt</TxLink></div>
         </section>
         <ShareLinkCard path={groupPath(result.groupId, result.text, result.blockNumber)} title={title.trim()} />
+        {accountsOn ? (
         <div className="card-inner grid gap-2">
           <p className="font-semibold">Want invitations and reminders?</p>
           <p className="hint">Save this group to your SplitPay account to invite people by email and remind anyone who has not paid. This is optional. Payments work without an account.</p>
           <button type="button" className="btn-ghost" onClick={() => navigate(groupPath(result.groupId, result.text, result.blockNumber).replace('?', '/manage?'))}>Invite people and set reminders</button>
         </div>
+        ) : null}
         <div className="grid gap-2 sm:grid-cols-2">
           <button type="button" className="btn-primary" onClick={() => navigate(groupPath(result.groupId, result.text, result.blockNumber))}>Open group page</button>
           <button type="button" className="btn-ghost" onClick={() => navigate('/dashboard')}>Go to my groups</button>

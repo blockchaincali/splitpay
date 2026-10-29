@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
+import { useAccountsAvailable } from './availability'
 
 interface Me {
   user: { id: number; email: string } | null
@@ -21,7 +22,8 @@ const Ctx = createContext<SessionValue | null>(null)
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient()
-  const q = useQuery({ queryKey: ['me'], queryFn: () => api.get<Me>('/auth/me'), retry: 1, staleTime: 30_000 })
+  const { available } = useAccountsAvailable()
+  const q = useQuery({ queryKey: ['me'], queryFn: () => api.get<Me>('/auth/me'), enabled: available, retry: 1, staleTime: 30_000 })
   const refresh = useCallback(async () => {
     await qc.invalidateQueries({ queryKey: ['me'] })
   }, [qc])
@@ -31,8 +33,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await qc.invalidateQueries({ queryKey: ['me'] })
   }, [qc])
   const value = useMemo<SessionValue>(
-    () => ({ user: q.data?.user ?? null, wallets: q.data?.wallets ?? [], loading: q.isLoading, offline: q.isError, refresh, signOut }),
-    [q.data, q.isLoading, q.isError, refresh, signOut],
+    () => ({
+      user: available ? (q.data?.user ?? null) : null,
+      wallets: available ? (q.data?.wallets ?? []) : [],
+      loading: available && q.isLoading,
+      offline: available && q.isError,
+      refresh,
+      signOut,
+    }),
+    [available, q.data, q.isLoading, q.isError, refresh, signOut],
   )
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

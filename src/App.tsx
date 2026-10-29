@@ -8,6 +8,7 @@ import { SignIn } from '@/pages/SignIn'
 import { Account } from '@/pages/Account'
 import { Manage } from '@/pages/Manage'
 import { Join } from '@/pages/Join'
+import { AccountsGate } from '@/components/AccountsGate'
 
 export default function App() {
   const { path } = useLocation()
@@ -18,13 +19,13 @@ export default function App() {
   return (
     <Layout>
       {manage ? (
-        <Manage key={manage.id} id={manage.id} />
+        <AccountsGate><Manage key={manage.id} id={manage.id} /></AccountsGate>
       ) : join ? (
-        <Join key={join.token} token={join.token} />
+        <AccountsGate><Join key={join.token} token={join.token} /></AccountsGate>
       ) : path === '/signin' ? (
-        <SignIn />
+        <AccountsGate><SignIn /></AccountsGate>
       ) : path === '/account' ? (
-        <Account />
+        <AccountsGate><Account /></AccountsGate>
       ) : group ? (
         <GroupPage key={group.id} id={group.id} />
       ) : path === '/new' ? (

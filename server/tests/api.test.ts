@@ -60,10 +60,15 @@ describe('email sign-in', () => {
     const res = await c.raw(new Request('http://test.local/auth/logout', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'x' }))
     expect(res.status).toBe(415)
   })
-  test('invalid email is rejected; Google sign-in reports it needs credentials', async () => {
+  test('invalid email is rejected; there is no Google sign-in route', async () => {
     const c = client(env.app)
     expect((await c.post('/auth/email/start', { email: 'nope' })).body.error).toBe('invalid_email')
-    expect((await c.get('/auth/google/start')).status).toBe(501)
+    expect((await c.get('/auth/google/start')).status).toBe(404)
+  })
+  test('health check answers JSON the app can recognise', async () => {
+    const res = await client(env.app).get('/health')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ ok: true, service: 'splitpay-api' })
   })
   test('protected routes need a session', async () => {
     expect((await client(env.app).get('/groups')).status).toBe(401)

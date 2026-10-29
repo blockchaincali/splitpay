@@ -64,13 +64,15 @@ For a single-process production run: `bun run build && bun run start` (or use th
 
 ### Environment variables
 
+SplitPay is wallet-first. Accounts (email sign-in, invitations, reminders, the NGN sandbox) are optional and off by default. They show up only when the build has `VITE_ACCOUNTS_ENABLED=true` **and** `/api/health` answers. A static host without the API (for example Vercel) shows none of it and needs no server.
+
 Frontend values are public only. Never put private keys in `VITE_` variables. Server values go in the host's secret store; `.env.example` lists all of them.
 
 - `VITE_SPLITPAY_ADDRESS`: deployed `SplitPayGroups` contract address.
 - `VITE_SPLITPAY_DEPLOY_BLOCK`: block the contract was deployed in (where history scans start).
 - `VITE_SPLITPAY_CHAIN_ID`: optional. Leave unset for Arc Testnet. `5042` switches the app to Arc mainnet (real USDC); read `docs/MAINNET_CHECKLIST.md` first.
 
-Server (all optional in development): `APP_ENV`, `PORT` or `SERVER_PORT`, `DATABASE_PATH`, `SERVER_SECRET`, `APP_BASE_URL`, `MAIL_PROVIDER`, `RESEND_API_KEY`, `MAIL_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `YELLOWCARD_API_KEY`, `YELLOWCARD_SECRET_KEY`, `YELLOWCARD_BASE_URL`, `SANDBOX_NGN_PER_USDC`, `SANDBOX_PROVIDER_FEE_BPS`. In development, sign-in codes appear in the app instead of being emailed. In production the server refuses to send mail until a provider is configured. The sandbox NGN rate is a demo number, not market data.
+Server (all optional in development): `APP_ENV`, `PORT` or `SERVER_PORT`, `DATABASE_PATH`, `SERVER_SECRET`, `APP_BASE_URL`, `MAIL_PROVIDER`, `RESEND_API_KEY`, `MAIL_FROM`, `YELLOWCARD_API_KEY`, `YELLOWCARD_SECRET_KEY`, `YELLOWCARD_BASE_URL`, `SANDBOX_NGN_PER_USDC`, `SANDBOX_PROVIDER_FEE_BPS`. In development, sign-in codes appear in the app instead of being emailed. In production the server refuses to send mail until a provider is configured. The sandbox NGN rate is a demo number, not market data.
 
 ### Scripts
 
@@ -79,6 +81,9 @@ bun run contracts:build   # compile contracts
 bun run contracts:test    # Foundry tests
 bun run test:lib          # split and share-link tests
 bun run test:server       # API server tests
+bun run test:landing      # landing page structure and copy
+bun run test:security     # production build contains no Studio hooks
+bun run test:accounts     # accounts stay optional (wallet-first)
 bun run server            # start the API server
 bun run start             # production mode (serves dist and /api)
 bun run e2e:testnet       # live Arc Testnet checks with throwaway wallets (see the script header)

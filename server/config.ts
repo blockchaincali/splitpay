@@ -30,8 +30,6 @@ export const config = {
   devMail: !isProd && env.MAIL_PROVIDER !== 'resend',
   resendApiKey: env.RESEND_API_KEY ?? '',
   mailFrom: env.MAIL_FROM ?? 'SplitPay <no-reply@example.invalid>',
-  googleClientId: env.GOOGLE_CLIENT_ID ?? '',
-  googleClientSecret: env.GOOGLE_CLIENT_SECRET ?? '',
   yellowCard: {
     apiKey: env.YELLOWCARD_API_KEY ?? '',
     secretKey: env.YELLOWCARD_SECRET_KEY ?? '',

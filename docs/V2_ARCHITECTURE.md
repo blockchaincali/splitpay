@@ -19,7 +19,7 @@ Browser (React, mobile-first)
   |
   '-- /api (Vite proxy in dev)
         API server (Bun) ---- SQLite (WAL) now, Postgres for production
-          |- auth: email one-time code (live), Google sign-in (needs credentials)
+          |- auth: email one-time code (live)
           |- wallet linking: signed challenge, server verifies signature
           |- groups index: verified against Arc before saving
           |- invitations, participants, reminders (mail adapter)
@@ -36,7 +36,6 @@ Provider adapters (server only)
 |-----------|-----------------------|-------|
 | Pay in USDC on Arc | live (testnet) | Unchanged v1 contract and flow |
 | Email sign-up and sign-in | live | One-time code, hashed, expiring, rate limited. Codes are shown in an in-app dev outbox until a mail provider is configured |
-| Google sign-in | needs-credentials | Server flow gated on `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` |
 | Embedded wallet without MetaMask | live (testnet only) | Key generated in the browser, encrypted with the user's PIN. Demo-grade, disabled on mainnet. Not custodial |
 | Circle passkey wallet | needs-credentials | Requires a Circle Console client key for the exact hostname |
 | Persistent accounts and histories | live | Server index, cross-checked against Arc |
@@ -116,3 +115,10 @@ M0 to M4 are implemented on this branch and verified (see `docs/TEST_EVIDENCE.md
 - A wallet can be linked to one account only. This is deliberate: it stops one person claiming another's wallet.
 - The server also serves the built app in production (`bun run start`, `Dockerfile`), so one container is the whole deployment.
 - Known scaling gap: history reads from the public RPC are chunked because wide ranges are rejected. A server-side indexer is part of M8.
+
+## Wallet-first change (29 October 2026)
+
+- A connected wallet is enough for everything: create a group, pay, and see "Your groups" (read from Arc, plus a local cache). No sign-in is ever required.
+- Account features (email sign-in, invitations, reminders, the NGN sandbox, saved groups) are hidden unless the build sets `VITE_ACCOUNTS_ENABLED=true` and `GET /api/health` returns `{"ok":true,"service":"splitpay-api"}`. A static host that answers HTML for `/api/health` counts as "no server".
+- "Continue with Google" and the server routes behind it were removed.
+- The app builds and runs fully as a static site with no API.

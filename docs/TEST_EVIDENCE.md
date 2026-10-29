@@ -59,7 +59,6 @@ The only browser console error in the run is an expected 404 when the organiser 
 ## Not tested
 
 - Real email delivery (no provider configured).
-- Google sign-in (no credentials).
 - Anything against Yellow Card or Circle services (no credentials).
 - The wallet-picker modal of third-party wallets (the stand-in wallet connects automatically).
 - Load or scale testing, and SQLite behaviour across many users.
@@ -78,3 +77,28 @@ The only browser console error in the run is an expected 404 when the organiser 
 The guest-journey script ended with a timeout at its last step on both runs because it used an outdated field label for the custom-amount form; that step is a script defect, not an app defect (the screen was verified at four widths separately, above). The script has been corrected in `docs/ui-verification/`.
 
 Browser runs used a stand-in wallet with throwaway testnet keys. They did not exercise a real browser-extension wallet.
+
+## GitHub sync and wallet-first change (29 October 2026)
+
+Merged `github/main` (PR #1 security hotfix, PR #2 landing page) into `consumer-v2`, ported `fe9168f` (RPC failover, clearer errors), then made accounts optional. The contract and `contracts/test/` are identical to `v1.0.0`.
+
+| Check | Result |
+|-------|--------|
+| `forge build`, `forge test` | Build succeeds, 70 of 70 tests pass |
+| `bun run typecheck`, lint | 0 errors, 0 warnings |
+| `bun run build` (accounts flag unset, as on a static host) | Succeeds |
+| `bun run test:lib` (includes the RPC failover and error-classification tests) | 21 passing |
+| `bun run test:landing` | 18 passing |
+| `bun run check:landing` (real browser, built site) | 61 passed, 0 failed |
+| `bun run test:security` (includes real-browser checks that the production build leaves the wallet, fetch and console alone) | 8 passing |
+| `bun run test:accounts` (new) | 10 passing: health check rejects HTML, wrong shapes and network failures; no Google; account pages gated; session request gated |
+| `bun run test:server` | 39 passing (new health test, Google route gone) |
+
+Browser runs (stand-in wallet, throwaway testnet key, Arc Testnet):
+- **Static host, accounts flag off** (a server that rewrites every unknown path to the app, like Vercel, with no API): no sign-in, Google, invite or reminder text on the home, create, dashboard or group page; zero requests to `/api`; the sign-in, account, invite and people pages show a calm "Your wallet is all you need" message; "Your groups" shows from the wallet alone; the full journey passed (create, share link, verify, overpayment blocked, pay, confirmed only after the network confirms, recipient received exactly 0.25 USDC, receipt, dashboard 0.25 of 1.00).
+- **Accounts flag on, API up:** Sign in appears, email sign-in works end to end, the account page has no Google.
+- **Accounts flag on, API unreachable, or `/api/health` answering HTML:** account features disappear with no error.
+
+Found and fixed during this work: the dev proxy stripped `/api` while the production-style server expected it, which broke the API after a restart. The dev proxy now keeps the prefix, so development and production take the same path.
+
+Not run: the landing check on a real phone; real email, Circle or Yellow Card. `fix/group-creation-rpc` commits `e79fc5a` (overlaps the security hotfix) and `ca8077d` (report-only CSP) were not brought in.

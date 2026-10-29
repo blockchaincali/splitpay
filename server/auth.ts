@@ -86,68 +86,12 @@ export function registerAuth(r: Router) {
     return { user: c.user, wallets }
   })
 
-  // --- Google sign-in: gated on credentials. Implemented from Google's documented OAuth 2.0 code flow; not exercised without a client ID.
-  r.add('GET', '/auth/google/start', (c) => {
-    if (!config.googleClientId || !config.googleClientSecret)
-      throw new HttpError(501, 'not_configured', 'Google sign-in needs GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on the server.')
-    const state = token(16)
-    const redirect = `${redirectBase(c.req)}/api/auth/google/callback`
-    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
-    url.search = new URLSearchParams({
-      client_id: config.googleClientId,
-      redirect_uri: redirect,
-      response_type: 'code',
-      scope: 'openid email',
-      state,
-      prompt: 'select_account',
-    }).toString()
-    const res = new Response(null, { status: 302, headers: { location: url.toString() } })
-    res.headers.append('set-cookie', `sp_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${isProd ? '; Secure' : ''}`)
-    return res
-  })
-
-  r.add('GET', '/auth/google/callback', async (c) => {
-    if (!config.googleClientId || !config.googleClientSecret) throw new HttpError(501, 'not_configured', 'Google sign-in is not configured.')
-    const state = c.query.get('state') ?? ''
-    const cookie = parseCookies(c.req.headers.get('cookie')).sp_oauth ?? ''
-    const code = c.query.get('code')
-    if (!code || !state || !safeEqual(state, cookie)) throw new HttpError(400, 'bad_state', 'Sign-in could not be verified. Please try again.')
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: config.googleClientId,
-        client_secret: config.googleClientSecret,
-        redirect_uri: `${redirectBase(c.req)}/api/auth/google/callback`,
-        grant_type: 'authorization_code',
-      }),
-    })
-    if (!tokenRes.ok) throw new HttpError(400, 'google_failed', 'Google sign-in failed.')
-    const { id_token } = (await tokenRes.json()) as { id_token?: string }
-    const info = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token ?? '')}`)
-    const claims = (await info.json()) as { aud?: string; email?: string; email_verified?: string | boolean }
-    if (!info.ok || claims.aud !== config.googleClientId || !claims.email || String(claims.email_verified) !== 'true')
-      throw new HttpError(400, 'google_failed', 'Google sign-in failed.')
-    const userId = upsertUser(c.db, normalizeEmail(claims.email))
-    startSession(c.db, userId, c.req, c.headers)
-    const res = new Response(null, { status: 302, headers: { location: '/' } })
-    c.headers.forEach((v, k) => res.headers.append(k, v))
-    return res
-  })
-
   // Development mail sink. Disabled in production and when a real mail provider is configured.
   r.add('GET', '/dev/outbox', (c) => {
     if (!config.devMail) throw new HttpError(404, 'not_found')
     const email = normalizeEmail(c.query.get('email'))
     return { messages: c.db.query('SELECT id, subject, body, created_at FROM outbox WHERE to_email = ? ORDER BY id DESC LIMIT 10').all(email) }
   })
-}
-
-/** Base URL for OAuth redirects: configured value, else the request origin. */
-function redirectBase(req: Request): string {
-  if (config.appBaseUrl) return config.appBaseUrl.replace(/\/$/, '')
-  return new URL(req.url).origin
 }
 
 /** Validate a client-suggested link base against what we trust. */

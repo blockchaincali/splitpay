@@ -25,7 +25,6 @@ export function integrationStatuses(devMail: boolean): IntegrationStatus[] {
   return [
     { id: 'usdc-arc', name: 'Pay with USDC on Arc', status: 'live', note: 'Unchanged v1 contract. Payments settle directly to the recipient.' },
     { id: 'email-auth', name: 'Email sign-in', status: 'live', note: devMail ? 'Codes appear in the development outbox. Configure a mail provider to email real codes.' : 'Codes are emailed.' },
-    { id: 'google-auth', name: 'Google sign-in', status: config.googleClientId && config.googleClientSecret ? 'needs-credentials' : 'needs-credentials', note: config.googleClientId ? 'Configured but not yet verified end to end.' : 'Needs a Google OAuth client ID and secret on the server.' },
     { id: 'embedded-wallet', name: 'SplitPay testnet wallet', status: 'live', note: 'Testnet only. Key is encrypted in your browser with your PIN. Not for real funds.' },
     { id: 'circle-passkey', name: 'Circle passkey wallet', status: 'needs-credentials', note: 'Needs a Circle Console client key for this site.' },
     { id: 'ngn-sandbox', name: 'NGN bank transfer (sandbox)', status: 'sandbox', note: 'No money moves. Demo rate. Never counted as collected.' },
@@ -77,6 +76,12 @@ const SANDBOX_TRANSITIONS: Record<string, string[]> = {
 }
 
 export function registerPayments(r: Router) {
+  // Liveness check used by the app to decide whether to show account features. Must answer JSON with this exact shape:
+  // a static host that rewrites unknown paths to index.html answers 200 HTML, which the app treats as "no server".
+  r.add('GET', '/health', (c) => {
+    c.db.query('SELECT 1').get()
+    return { ok: true, service: 'splitpay-api' }
+  })
   r.add('GET', '/integrations/status', () => ({ integrations: integrationStatuses(config.devMail) }))
 
   r.add('POST', '/quotes', async (c) => {

@@ -13,6 +13,7 @@ import { usePayShare } from '@/lib/usePayShare'
 import { useNow } from '@/lib/time'
 import { Notice, Spinner, TxLink } from './ui'
 import { NgnPanel } from './NgnPanel'
+import { useAccountsAvailable } from '@/account/availability'
 import { StatusSteps } from './StatusSteps'
 
 const MAX_NAME_BYTES = 24
@@ -57,7 +58,9 @@ export function PayPanel({ groupId, group, meta, onPaid }: Props) {
   const [name, setName] = useState('')
   const [picked, setPicked] = useState<number | null>(null)
   const prefilled = useRef(false)
-  const [method, setMethod] = useState<'usdc' | 'ngn'>('usdc')
+  const { available: accountsOn } = useAccountsAvailable()
+  const [chosenMethod, setMethod] = useState<'usdc' | 'ngn'>('usdc')
+  const method = accountsOn ? chosenMethod : 'usdc'
 
   // Pre-fill once with the first option (never more than what is still needed).
   useEffect(() => {
@@ -137,6 +140,7 @@ export function PayPanel({ groupId, group, meta, onPaid }: Props) {
             if (method === 'usdc' && amount !== null && !problem && nameBytes <= MAX_NAME_BYTES) void pay(amount, name.trim())
           }}
         >
+          {accountsOn ? (
           <fieldset>
             <legend className="label">How do you want to pay?</legend>
             <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Payment method">
@@ -162,6 +166,7 @@ export function PayPanel({ groupId, group, meta, onPaid }: Props) {
               ))}
             </div>
           </fieldset>
+          ) : null}
           {options.length > 1 || (meta?.m === 'custom' && options.length > 0) ? (
             <fieldset>
               <legend className="label">Who are you?</legend>
