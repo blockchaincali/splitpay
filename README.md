@@ -8,17 +8,31 @@ Built with [Arc Studio](https://studio.arc.io)
 
 ## Grant submission (Arc Microgrants Round 2)
 
-- Arc Studio project URL: _paste your Arc Studio project URL here_
+- Arc Studio project URL: https://studio.arc.io/app/b48c1672-5469-4cc3-9277-20e5e45cd5e8
 - Live app URL: _paste your Vercel URL here_
-- Mainnet: **not deployed.** No real USDC has moved. The Arc Microgrants (Built with Arc Studio) round requires a mainnet deployment; see `docs/submission/ARC_MICROGRANTS_SUBMISSION.md`.
-- Network: Arc Testnet (chain ID 5042002); see `docs/MAINNET_CHECKLIST.md` for the readiness checklist and independent deployment steps.
+- Public repository: https://github.com/blockchaincali/splitpay
+
+### Arc mainnet (fill in after your own deployment; see `docs/MAINNET_CHECKLIST.md`)
+
+**Not deployed to mainnet yet. No real USDC has moved.** These spaces stay empty until you have deployed and tested yourself:
+
+| Item | Value |
+|------|-------|
+| Mainnet contract address (`SplitPayGroups`) | _paste after deploying_ |
+| Mainnet deploy transaction | _paste after deploying_ |
+| Mainnet deploy block | _paste after deploying_ |
+| First real USDC payment transaction (through the app and contract) | _paste after the small rehearsal_ |
+| Explorer | https://explorer.arc.io |
+
+### Arc Testnet (chain ID 5042002), what has been verified
+
 - Contract: `SplitPayGroups` at `0xd7f9c3823e81fe27300693c060a6418ad3eed806` ([explorer](https://explorer.testnet.arc.io/address/0xd7f9c3823e81fe27300693c060a6418ad3eed806))
 - Deployment transaction: `0x7bf806f4ab7864f97b0a643b0f8f1a90b73ae8cf7d680da2249673f993c028cc`, block 69502501
-- Contract tests: 70 passing (unit, bad-token, fuzz and invariant tests)
-- Frontend library tests: 10 passing
-- Live testnet check: 31 of 31 checks passing, with transaction hashes in `docs/e2e-testnet-report.json`
-- Browser check of the running app (create, share link, verify, pay, confirm, dashboard) with test wallets on Arc Testnet: passing
-- Security review: see `docs/SECURITY_REVIEW.md`
+- Contract tests: 70 passing (unit, bad-token, fuzz and invariant tests), also passing on Arc's own runtime with `arc-forge test --network arc`
+- Live testnet check: 31 of 31 checks passing (`bun run e2e:testnet`), hashes in `docs/e2e-testnet-report.json`
+- A fresh copy deployed with Arc Foundry and an encrypted keystore, exactly as the mainnet steps describe, has runtime code identical to the grant contract and is verified on the testnet explorer
+- Browser checks of the running app (create, share link, verify, pay, confirm, "Your groups") with test wallets: passing
+- Security review: see `docs/SECURITY_REVIEW.md`. It is an automated review, not an independent audit
 
 ## What it does
 
@@ -68,9 +82,10 @@ SplitPay is wallet-first. Accounts (email sign-in, invitations, reminders, the N
 
 Frontend values are public only. Never put private keys in `VITE_` variables. Server values go in the host's secret store; `.env.example` lists all of them.
 
-- `VITE_SPLITPAY_ADDRESS`: deployed `SplitPayGroups` contract address.
+- `VITE_SPLITPAY_ADDRESS`: deployed `SplitPayGroups` contract address on the network you target.
 - `VITE_SPLITPAY_DEPLOY_BLOCK`: block the contract was deployed in (where history scans start).
-- `VITE_SPLITPAY_CHAIN_ID`: optional. Leave unset for Arc Testnet. `5042` switches the app to Arc mainnet (real USDC); read `docs/MAINNET_CHECKLIST.md` first.
+- `VITE_SPLITPAY_CHAIN_ID`: optional. Leave unset for Arc Testnet. `5042` targets Arc mainnet (real USDC, mainnet RPC endpoints, explorer.arc.io); read `docs/MAINNET_CHECKLIST.md` first.
+- On Vercel these three are set in the project's Environment Variables (nothing is hard-coded in `vercel.json`). Use mainnet values for Production and testnet values for Preview.
 
 Server (all optional in development): `APP_ENV`, `PORT` or `SERVER_PORT`, `DATABASE_PATH`, `SERVER_SECRET`, `APP_BASE_URL`, `MAIL_PROVIDER`, `RESEND_API_KEY`, `MAIL_FROM`, `YELLOWCARD_API_KEY`, `YELLOWCARD_SECRET_KEY`, `YELLOWCARD_BASE_URL`, `SANDBOX_NGN_PER_USDC`, `SANDBOX_PROVIDER_FEE_BPS`. In development, sign-in codes appear in the app instead of being emailed. In production the server refuses to send mail until a provider is configured. The sandbox NGN rate is a demo number, not market data.
 
@@ -84,6 +99,7 @@ bun run test:server       # API server tests
 bun run test:landing      # landing page structure and copy
 bun run test:security     # production build contains no Studio hooks
 bun run test:accounts     # accounts stay optional (wallet-first)
+bun run test:mainnet      # mainnet config matches Arc's docs (chain, RPCs, explorer, USDC)
 bun run server            # start the API server
 bun run start             # production mode (serves dist and /api)
 bun run e2e:testnet       # live Arc Testnet checks with throwaway wallets (see the script header)

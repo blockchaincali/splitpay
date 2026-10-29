@@ -137,3 +137,22 @@ Browser run on Arc Testnet (stand-in wallet, throwaway key; `docs/ui-verificatio
 - No page errors.
 
 Regression tests: BUG 1 (parallel windows, growth, per-endpoint limit learning, endpoint failover and cooldown, partial results kept, contiguous resume point, revisit fetches only new blocks, cursor saved after every chunk, no percentage counter) and BUG 2 (created group listed at once, case-insensitive address and id matching, cursor and groups saved per chunk, errors only when nothing loaded). A simulation of the four real endpoint behaviours finishes a 200,000-block scan in under 40 calls.
+
+## Mainnet preparation (29 October 2026)
+
+Nothing was deployed to or sent on Arc mainnet. Mainnet RPC calls were read-only (chain ID, block number, log queries on an address with no logs).
+
+| Check | Result |
+|-------|--------|
+| Mainnet facts vs Arc's official docs (chain 5042, four public RPC endpoints, explorer.arc.io, USDC `0x3600...0000` with 6 decimals) | Match. `bun run test:mainnet` (10 tests) fails if the code drifts from the documented values |
+| `VITE_SPLITPAY_CHAIN_ID=5042` build with a placeholder address and block taken from the environment | Targets chain 5042; mainnet banner and "real USDC" wording; no test-network wording or faucet; links on `explorer.arc.io`; scanner and failover use the four mainnet endpoints; the testnet contract address is not baked in |
+| `vercel.json` | No network, contract address or block any more: the Vercel dashboard variables control them |
+| Scanner against the four live mainnet endpoints | 200,000 blocks scanned in 29 requests (1.1 s) with failover. Primary and QuickNode accept up to 9,999 blocks, Blockdaemon 50,000, dRPC refuses log queries on its free plan. Arc's documented codes -32012 (range) and -32014 (retry) are handled |
+| `arc-forge test --network arc` (Arc Foundry v0.8.0-2, Arc's own runtime) | 70 of 70 passed |
+| Dry run then broadcast on Arc Testnet with `arc-forge script ... --account <keystore>` (the mainnet command shape) | Succeeded. Fresh copy at `0x9299b7b9091e41C9F52666Bc3d979c48eD5d7bc8`, tx `0x5f852c4109e298d4640f3aa3ba27e0117c0c6342f8c2ca365d35b03c18454ce3`, block 69704858. Dry run estimated about 0.04 USDC at roughly 44 Gwei |
+| Fresh copy vs the grant contract | Runtime code hashes identical; `usdc()` is the official USDC; `MAX_NAME_BYTES()` is 24 |
+| `arc-forge verify-contract` on the testnet explorer | "Pass - Verified" |
+| `bun run e2e:testnet` against the fresh copy | 31 of 31 checks passed (report in `docs/e2e-testnet-report.json`) |
+| Full suite: lint and types, `forge test` (70), `test:lib` 40, `test:landing` 18, `test:accounts` 10, `test:server` 39, `test:mainnet` 10, `test:security` 8 (real browser), `check:landing` 61, testnet and mainnet builds | All pass. The contract and `contracts/test/` are identical to `v1.0.0` |
+
+The fresh testnet copy is a verification artifact for the deployment procedure. The grant submission contract is still the one in the README, and no contract source changed.
