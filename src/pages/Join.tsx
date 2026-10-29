@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError } from '@/api/client'
 import { useSession } from '@/account/SessionProvider'
+import { embeddedAvailable } from '@/wallet/embedded'
 import { useLinkWallet } from '@/account/useLinkWallet'
 import { fmtUsdcLabel } from '@/lib/money'
 import { navigate } from '@/lib/router'
@@ -67,7 +68,7 @@ export function Join({ token }: { token: string }) {
           {user && !address ? <button type="button" className="btn-primary" onClick={openConnectChooser}>Connect a wallet</button> : null}
           {user && address && !linked ? <button type="button" className="btn-primary" disabled={linking} onClick={() => void link()}>{linking ? <Spinner /> : null} Link this wallet</button> : null}
           {linkError ? <p className="error-text" role="alert">{linkError}</p> : null}
-          <p className="hint">No wallet yet? Choose the SplitPay testnet wallet when connecting. It needs no extension.</p>
+          {embeddedAvailable() ? <p className="hint">No wallet yet? Choose the SplitPay testnet wallet when connecting. It needs no extension.</p> : null}
         </li>
         <li className="grid gap-2" aria-disabled={!linked}>
           <p className="font-semibold">3. Join and pay</p>

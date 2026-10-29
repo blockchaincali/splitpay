@@ -20,14 +20,14 @@ const mainnetRpc = requireChain(arc.id).rpcUrls[0]
 registerChain(arcTestnet.id, testnetRpc)
 registerChain(arc.id, mainnetRpc)
 
-// Mainnet keeps its original single-endpoint transport on purpose; only testnet gets RPC failover.
+// Both Arc networks retry and fail over across their published endpoints (see src/lib/rpc.ts).
 // Arc mainnet is configured but unused unless VITE_SPLITPAY_CHAIN_ID=5042 (see src/lib/deployment.ts).
 export const config = createConfig({
   chains: [arcTestnet, arc, mainnet], // Ethereum mainnet is only for ENS name resolution
   connectors: [injected()],
   transports: {
     [arcTestnet.id]: transportForChain(arcTestnet),
-    [arc.id]: http(mainnetRpc),
+    [arc.id]: transportForChain(arc),
     [mainnet.id]: http(),
   },
 })

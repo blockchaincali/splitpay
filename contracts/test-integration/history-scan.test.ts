@@ -251,6 +251,10 @@ describe('BUG 1: payment history is scanned in parallel, resumably, and survives
     expect(classifyScanError(new Error('query returned more than 10000 results'))).toBe('range')
     expect(classifyScanError(new Error('Request exceeds defined limit'))).toBe('limit')
     expect(classifyScanError(new Error('rate limit exceeded'))).toBe('limit')
+    // Arc's documented JSON-RPC codes win over the message text
+    expect(classifyScanError(Object.assign(new Error('something'), { code: -32012 }))).toBe('range')
+    expect(classifyScanError(Object.assign(new Error('block range'), { code: -32014 }))).toBe('transient')
+    expect(classifyScanError(new Error('wrapper', { cause: Object.assign(new Error('x'), { code: -32012 }) }))).toBe('range')
     expect(classifyScanError(new Error('429 Too Many Requests'))).toBe('limit')
     expect(classifyScanError(new Error('fetch failed'))).toBe('transient')
     expect(classifyScanError(Object.assign(new Error('RPC Request failed.'), { cause: new Error('requested range too large') }))).toBe('range')

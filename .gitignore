@@ -22,3 +22,6 @@ server/data/
 *.db-wal
 *.db-shm
 .uitest*/
+
+# forge script output (transaction data) - never commit
+broadcast/

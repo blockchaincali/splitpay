@@ -229,7 +229,7 @@ export function PayPanel({ groupId, group, meta, onPaid }: Props) {
             {problem ? <p className="error-text" role="alert">{problem}</p> : null}
             {balance !== undefined && balance === 0n && !IS_MAINNET ? (
               <p className="hint">
-                Need test USDC? Use the <strong>Get test USDC</strong> button in the Arc Studio sidebar, or the{' '}
+                Need test USDC? Get some from the{' '}
                 <a className="underline underline-offset-4" href={FAUCET_URL} target="_blank" rel="noopener noreferrer">Circle faucet</a>.
               </p>
             ) : null}

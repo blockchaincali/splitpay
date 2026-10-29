@@ -97,7 +97,23 @@ function errorText(e: unknown): string {
  *            unless the window was wider than anything that endpoint has accepted.
  * transient: timeouts, dropped connections, 5xx.
  */
+/** JSON-RPC error codes anywhere in an error's cause chain. */
+function rpcCodes(e: unknown): number[] {
+  const out: number[] = []
+  for (let x: unknown = e, i = 0; x && typeof x === 'object' && i < 6; i++) {
+    const code = (x as { code?: unknown }).code
+    if (typeof code === 'number') out.push(code)
+    x = (x as { cause?: unknown }).cause
+  }
+  return out
+}
+
 export function classifyScanError(e: unknown): ScanErrorKind {
+  // Arc's documented codes: -32012 = log range above the endpoint's limit; -32014 = the endpoint behind the load balancer
+  // has not imported the requested block yet, so retry after a brief backoff (not a range problem).
+  const codes = rpcCodes(e)
+  if (codes.includes(-32012)) return 'range'
+  if (codes.includes(-32014)) return 'transient'
   const t = errorText(e)
   if (/rate limit|too many requests|\b429\b/.test(t)) return 'limit'
   if (/range|too large|too many (blocks|results|logs)|query returned more than|more than \d+ results|response size|block span|limit of \d+ blocks|exceeds max block/.test(t)) return 'range'
