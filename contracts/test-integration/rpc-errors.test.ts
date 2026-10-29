@@ -3,7 +3,8 @@ import { BaseError, HttpRequestError, SwitchChainError, TimeoutError, createPubl
 import { arcTestnet } from 'viem/chains'
 import { friendlyError, isTransportError } from '../../src/lib/errors'
 import { describeError } from '../../src/lib/log'
-import { buildRpcTransport, rpcUrlsFor } from '../../src/lib/rpc'
+import { buildRpcTransport, probeEndpoints, rpcUrlsFor } from '../../src/lib/rpc'
+import { isEmbeddedInArcStudio, parentIsArcStudio } from '../../src/lib/studioHost'
 
 const NETWORK = 'Network issue. Check your connection and try again.'
 const GENERIC = 'Something went wrong. Nothing was charged unless a transaction link is shown.'
@@ -103,5 +104,55 @@ describe('buildRpcTransport retry and fallback (local JSON-RPC servers)', () => 
     const err = await client(['http://localhost:1', 'http://localhost:2']).getBlockNumber().catch((e) => e)
     expect(isTransportError(err)).toBe(true)
     expect(friendlyError(err).message).toBe(NETWORK)
+  })
+})
+
+describe('describeError transport details', () => {
+  test('keeps HTTP status, endpoint hostname and one-line detail, but not the path, body or later lines', () => {
+    const http = new HttpRequestError({ url: 'https://rpc.example.test/v1/SECRET-KEY', status: 403, body: { method: 'eth_call' }, details: 'Forbidden\nraw body' })
+    const d = describeError(new Error('outer', { cause: http }))
+    const line = d.chain.find((c) => c.startsWith('HttpRequestError'))!
+    expect(line).toContain('status=403')
+    expect(line).toContain('host=rpc.example.test')
+    expect(line).toContain('detail=Forbidden')
+    expect(JSON.stringify(d)).not.toContain('SECRET-KEY')
+    expect(JSON.stringify(d)).not.toContain('raw body')
+  })
+})
+
+describe('probeEndpoints', () => {
+  const asFetch = (fn: (url: string, init: RequestInit) => Promise<Response>) => fn as unknown as typeof fetch
+
+  test('distinguishes ok, CORS and fully blocked endpoints', async () => {
+    const fake = asFetch(async (url, init) => {
+      if (url.includes('ok.test')) return new Response('{}', { status: 200 })
+      if (url.includes('cors.test')) {
+        if (init.mode === 'no-cors') return new Response(null)
+        throw new TypeError('Failed to fetch')
+      }
+      throw new TypeError('Failed to fetch')
+    })
+    const r = await probeEndpoints(['https://ok.test/', 'https://cors.test/', 'https://down.test/'], 1000, fake)
+    expect(r.map((p) => [p.host, p.result])).toEqual([['ok.test', 'ok'], ['cors.test', 'cors'], ['down.test', 'blocked']])
+    expect(r[0].status).toBe(200)
+  })
+})
+
+describe('Arc Studio instrumentation scope', () => {
+  test('only a direct Arc Studio parent enables it', () => {
+    expect(parentIsArcStudio(['https://studio.arc.io'])).toBe(true)
+    expect(parentIsArcStudio(['https://studio-staging.arc.io', 'https://x.test'])).toBe(true)
+    expect(parentIsArcStudio(undefined, 'https://studio.arc.io/project/1')).toBe(true) // Firefox: no ancestorOrigins
+  })
+  test('other parents, spoofy lookalikes and no parent do not', () => {
+    expect(parentIsArcStudio(['https://evil.example'])).toBe(false)
+    expect(parentIsArcStudio(['https://studio.arc.io.evil.example'])).toBe(false)
+    expect(parentIsArcStudio(['https://evil.example'], 'https://studio.arc.io/')).toBe(false) // ancestorOrigins wins over referrer
+    expect(parentIsArcStudio(undefined, '')).toBe(false)
+    expect(parentIsArcStudio([], 'not a url')).toBe(false)
+  })
+  test('a top-level page never enables it', () => {
+    // bun has no window, so isEmbeddedInArcStudio must fail closed instead of throwing
+    expect(isEmbeddedInArcStudio()).toBe(false)
   })
 })

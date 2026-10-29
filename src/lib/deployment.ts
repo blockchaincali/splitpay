@@ -10,6 +10,7 @@ import { usdcDecimalsFor } from '@/onchain-money'
 export type TargetChainId = typeof arc.id | typeof arcTestnet.id
 export const TARGET_CHAIN_ID: TargetChainId = Number(import.meta.env.VITE_SPLITPAY_CHAIN_ID) === arc.id ? arc.id : arcTestnet.id
 export const IS_MAINNET = TARGET_CHAIN_ID === arc.id
+export const TARGET_VIEM_CHAIN = IS_MAINNET ? arc : arcTestnet
 
 export const TARGET_CHAIN = requireChain(TARGET_CHAIN_ID)
 export const USDC = getUsdc(TARGET_CHAIN_ID)

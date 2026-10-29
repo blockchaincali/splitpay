@@ -2,9 +2,10 @@ import { useCallback, useState } from 'react'
 import { useAccount, usePublicClient, useSwitchChain, useWriteContract } from 'wagmi'
 import { encodeAbiParameters, keccak256, parseEventLogs, toHex, type Address, type Hex, type PublicClient } from 'viem'
 import { splitPayAbi } from './splitpayAbi'
-import { SPLITPAY_ADDRESS, TARGET_CHAIN_ID } from './deployment'
-import { friendlyError } from './errors'
+import { SPLITPAY_ADDRESS, TARGET_CHAIN_ID, TARGET_VIEM_CHAIN } from './deployment'
+import { friendlyError, isTransportError } from './errors'
 import { logFailure } from './log'
+import { logEndpointProbe } from './rpc'
 import { hashMetaText } from './metadata'
 import { saveStoredGroup } from './localGroups'
 
@@ -94,7 +95,10 @@ export function useCreateGroup() {
         setStep('done')
       } catch (e) {
         const f = friendlyError(e, { stage })
-        if (!f.cancelled) logFailure('createGroup', stage, e, { walletChainId: chainId, targetChainId: TARGET_CHAIN_ID })
+        if (!f.cancelled) {
+          logFailure('createGroup', stage, e, { walletChainId: chainId, targetChainId: TARGET_CHAIN_ID })
+          if (isTransportError(e)) void logEndpointProbe(TARGET_VIEM_CHAIN)
+        }
         setStep(f.cancelled ? 'idle' : 'failed')
         setError(f.message)
       }

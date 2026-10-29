@@ -10,6 +10,11 @@
  * Built with Arc Studio — https://studio.arc.io
  */
 
+import { isEmbeddedInArcStudio } from './lib/studioHost';
+
+/** Hooks only run inside the Arc Studio preview, never on a deployed site. */
+const ACTIVE = isEmbeddedInArcStudio();
+
 // ---------------------------------------------------------------------------
 // Types (inlined — sandbox can't use app module aliases)
 // ---------------------------------------------------------------------------
@@ -132,7 +137,7 @@ function setupTraceAPI(): void {
   (window as unknown as { __studioTrace: StudioTraceAPI }).__studioTrace = api;
 }
 
-setupTraceAPI();
+if (ACTIVE) setupTraceAPI();
 
 // ---------------------------------------------------------------------------
 // emitWithGroups — attaches current group ancestry to RPC/HTTP events
@@ -215,7 +220,7 @@ function parseChainId(raw: unknown): number {
 
 let _enabled = false;
 
-window.addEventListener('message', (e: MessageEvent<MessageData>) => {
+if (ACTIVE) window.addEventListener('message', (e: MessageEvent<MessageData>) => {
   if (e.source !== window.parent) {
     return;
   }
@@ -343,7 +348,7 @@ function findResp(resps: JRPCRes[], reqId: unknown): JRPCRes | undefined {
 // Patch globalThis.fetch — captures viem http() transport + regular HTTP
 // ---------------------------------------------------------------------------
 
-try {
+if (ACTIVE) try {
   const _fetch = globalThis.fetch;
   log('patching fetch');
 
@@ -473,7 +478,7 @@ function patchProvider(provider: EIP1193Provider | undefined): void {
   } catch { /* not all providers support .on() */ }
 }
 
-try {
+if (ACTIVE) try {
   // Case 1: provider already exists
   const existingProvider = getEthereum();
   if (existingProvider) {

@@ -2,9 +2,10 @@ import { useCallback, useState } from 'react'
 import { useAccount, usePublicClient, useSwitchChain, useWriteContract } from 'wagmi'
 import { erc20Abi, parseEventLogs, type Address, type Hex, type PublicClient } from 'viem'
 import { splitPayAbi } from './splitpayAbi'
-import { SPLITPAY_ADDRESS, TARGET_CHAIN_ID, USDC } from './deployment'
-import { friendlyError } from './errors'
+import { SPLITPAY_ADDRESS, TARGET_CHAIN_ID, TARGET_VIEM_CHAIN, USDC } from './deployment'
+import { friendlyError, isTransportError } from './errors'
 import { logFailure } from './log'
+import { logEndpointProbe } from './rpc'
 
 export type PayStep =
   | 'idle'
@@ -138,7 +139,10 @@ export function usePayShare(groupId: Hex) {
         setStep('done')
       } catch (e) {
         const f = friendlyError(e, { stage })
-        if (!f.cancelled) logFailure('pay', stage, e, { walletChainId: chainId, targetChainId: TARGET_CHAIN_ID })
+        if (!f.cancelled) {
+          logFailure('pay', stage, e, { walletChainId: chainId, targetChainId: TARGET_CHAIN_ID })
+          if (isTransportError(e)) void logEndpointProbe(TARGET_VIEM_CHAIN)
+        }
         if (f.cancelled) {
           setStep('idle')
           setError(f.message)
