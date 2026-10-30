@@ -1,0 +1,60 @@
+// Read-only verification of a deployed SplitPayGroups. Sends NO transactions.
+// Usage: copy this file to the repo root as verify.ts, run `forge build`, then
+//   bun run verify.ts
+// Optional env: CONTRACT, DEPLOY_TX, PAYMENT_TXS (comma separated), RPC_URLS (comma separated), COMPARE_CODE_AT=<testnet address>, COMPARE_RPC
+import { createPublicClient, http, keccak256, getAddress, decodeEventLog, formatUnits, erc20Abi } from 'viem'
+import { readFileSync } from 'node:fs'
+import { splitPayAbi } from './src/lib/splitpayAbi'
+
+const ADDR = getAddress(process.env.CONTRACT ?? '0x5E02A090D6fbEADeF2cAb310Da64C222677A809a')
+const USDC = getAddress('0x3600000000000000000000000000000000000000')
+const URLS = (process.env.RPC_URLS ?? 'https://rpc.mainnet.arc.io,https://rpc.blockdaemon.mainnet.arc.io,https://rpc.quicknode.mainnet.arc.io').split(',')
+const DEPLOY = process.env.DEPLOY_TX ?? '0xdb5807f12cff462ce71b09562f808a1f1f84c72c7fa70ba608de261a5d75bcab'
+const PAYS = (process.env.PAYMENT_TXS ?? '0x2271805f7af74b98f79385dd5cb8703602cc28d485c37c73821e6eca8cbb2b0d,0x20c0549036ed7393c7b1c5603c9fd0b0fa1a6f28ce377d9b31e063fbad49f8a6').split(',')
+
+// 1. Runtime bytecode vs the local build (immutable slots and the metadata hash are ignored)
+const art = JSON.parse(readFileSync('contracts/out/SplitPayGroups.sol/SplitPayGroups.json', 'utf8'))
+const local: string = art.deployedBytecode.object
+const slots: { start: number; length: number }[] = Object.values(art.deployedBytecode.immutableReferences as Record<string, { start: number; length: number }[]>).flat()
+const strip = (hex: string) => { const b = hex.slice(2); const len = parseInt(b.slice(-4), 16); return b.slice(0, b.length - 4 - len * 2) }
+const mask = (h: string) => { const s = h.slice(2).split(''); for (const r of slots) for (let i = r.start * 2; i < (r.start + r.length) * 2; i++) s[i] = '0'; return '0x' + s.join('') }
+const codes: string[] = []
+for (const url of URLS) {
+  const c = createPublicClient({ transport: http(url, { retryCount: 3 }) })
+  const code = (await c.getCode({ address: ADDR })) as string
+  codes.push(code)
+  console.log('endpoint', url, 'chainId', await c.getChainId(), 'bytes', (code.length - 2) / 2, 'keccak', keccak256(code))
+}
+console.log('endpoints agree:', new Set(codes).size === 1)
+const onChain = codes[0]
+const imm = slots.map((r) => onChain.slice(2 + r.start * 2, 2 + (r.start + r.length) * 2))
+console.log('immutable usdc is the official USDC:', imm.every((b) => b.toLowerCase().endsWith(USDC.slice(2).toLowerCase())))
+console.log('identical to local build except metadata + immutables:', strip(mask(onChain)) === strip(mask(local)))
+if (process.env.COMPARE_CODE_AT) {
+  const t = createPublicClient({ transport: http(process.env.COMPARE_RPC ?? 'https://rpc.testnet.arc.io', { retryCount: 3 }) })
+  console.log('identical to', process.env.COMPARE_CODE_AT, 'except metadata:', strip((await t.getCode({ address: getAddress(process.env.COMPARE_CODE_AT) })) as string) === strip(onChain))
+}
+
+// 2. Constants, deploy receipt and payment receipts
+const c = createPublicClient({ transport: http(URLS[0], { retryCount: 4, retryDelay: 1200 }) })
+console.log('usdc():', await c.readContract({ address: ADDR, abi: splitPayAbi, functionName: 'usdc' }), '| MAX_NAME_BYTES():', String(await c.readContract({ address: ADDR, abi: splitPayAbi, functionName: 'MAX_NAME_BYTES' })))
+const dr = await c.getTransactionReceipt({ hash: DEPLOY as `0x${string}` })
+console.log('deploy:', dr.status, 'block', String(dr.blockNumber), 'contractAddress matches:', dr.contractAddress ? getAddress(dr.contractAddress) === ADDR : false, 'fee USDC', formatUnits(dr.gasUsed * (dr.effectiveGasPrice ?? 0n), 18))
+const groups = new Set<`0x${string}`>()
+for (const h of PAYS) {
+  const r = await c.getTransactionReceipt({ hash: h as `0x${string}` })
+  for (const l of r.logs.filter((x) => getAddress(x.address) === ADDR)) {
+    const d = decodeEventLog({ abi: splitPayAbi, data: l.data, topics: l.topics }) as { eventName: string; args: Record<string, never> }
+    if (d.eventName !== 'ContributionReceived') continue
+    const a = d.args as unknown as { groupId: `0x${string}`; contributor: string; amount: bigint; totalCollected: bigint; name: string }
+    groups.add(a.groupId)
+    console.log('payment', h.slice(0, 10), r.status, 'ContributionReceived from this contract:', a.contributor, formatUnits(a.amount, 6), 'USDC, total', formatUnits(a.totalCollected, 6), 'name', JSON.stringify(a.name))
+  }
+  for (const l of r.logs.filter((x) => getAddress(x.address) === USDC)) {
+    try { const d = decodeEventLog({ abi: erc20Abi, data: l.data, topics: l.topics }); if (d.eventName === 'Transfer') console.log('   USDC Transfer', d.args.from, '->', d.args.to, formatUnits(d.args.value, 6)) } catch { /* not a Transfer */ }
+  }
+}
+for (const g of groups) {
+  const x = await c.readContract({ address: ADDR, abi: splitPayAbi, functionName: 'getGroup', args: [g] })
+  console.log('group', g.slice(0, 12), 'creator', x[0], 'recipient', x[1], 'target', formatUnits(x[2], 6), 'collected', formatUnits(x[4], 6))
+}
