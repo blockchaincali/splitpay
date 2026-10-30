@@ -1,6 +1,6 @@
 # SplitPay mainnet readiness checklist and deployment instructions
 
-**Status: NOT deployed to mainnet. Preparation only.**
+**Status: deployed to Arc mainnet by the owner on 30 October 2026 (via Remix and MetaMask). See `docs/DEPLOYMENTS.md` for the address, transactions and read-only verification results. This checklist remains the procedure for any further mainnet deployment.**
 
 Arc Studio does not deploy to, transact on, sign for, fund, or otherwise interact with mainnet on your behalf. Its deploy tool is testnet-only and cannot sign with your wallet. Everything below is for you to review and run yourself, outside Arc Studio. Mainnet transactions use real USDC and are irreversible. You are solely responsible for what you deploy and operate.
 

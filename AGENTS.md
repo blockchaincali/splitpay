@@ -16,6 +16,10 @@ SplitPay lets an organiser create a USDC payment group (title, goal, deadline, r
 
 ## Deployed contracts
 
+- Arc mainnet (5042): `SplitPayGroups` `0x5E02A090D6fbEADeF2cAb310Da64C222677A809a`, deployed by the owner via Remix + MetaMask
+  - Deploy tx `0xdb5807f12cff462ce71b09562f808a1f1f84c72c7fa70ba608de261a5d75bcab`, block 28666906
+  - Live app https://splitpay-sepia.vercel.app (Vercel env: `VITE_SPLITPAY_CHAIN_ID=5042`, address, block). The Arc Studio preview and local `.env` stay on testnet.
+  - Verified read-only against chain: `docs/DEPLOYMENTS.md`. Never deploy to or transact on mainnet from Arc Studio.
 - Arc Testnet: `SplitPayGroups` `0xd7f9c3823e81fe27300693c060a6418ad3eed806`
   - Deploy tx `0x7bf806f4ab7864f97b0a643b0f8f1a90b73ae8cf7d680da2249673f993c028cc`, block 69502501
   - Wired through `.env`: `VITE_SPLITPAY_ADDRESS`, `VITE_SPLITPAY_DEPLOY_BLOCK`
