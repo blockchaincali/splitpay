@@ -9,20 +9,22 @@ Built with [Arc Studio](https://studio.arc.io)
 ## Grant submission (Arc Microgrants Round 2)
 
 - Arc Studio project URL: https://studio.arc.io/app/b48c1672-5469-4cc3-9277-20e5e45cd5e8
-- Live app URL: _paste your Vercel URL here_
+- Live app URL: https://splitpay-sepia.vercel.app (Vercel production, Arc mainnet)
 - Public repository: https://github.com/blockchaincali/splitpay
 
-### Arc mainnet (fill in after your own deployment; see `docs/MAINNET_CHECKLIST.md`)
+### Arc mainnet (chain ID 5042): live
 
-**Not deployed to mainnet yet. No real USDC has moved.** These spaces stay empty until you have deployed and tested yourself:
+Deployed by the owner from their own wallet and checked read-only on 30 October 2026. Full record and verification results: [`docs/DEPLOYMENTS.md`](docs/DEPLOYMENTS.md).
 
 | Item | Value |
 |------|-------|
-| Mainnet contract address (`SplitPayGroups`) | _paste after deploying_ |
-| Mainnet deploy transaction | _paste after deploying_ |
-| Mainnet deploy block | _paste after deploying_ |
-| First real USDC payment transaction (through the app and contract) | _paste after the small rehearsal_ |
+| Mainnet contract address (`SplitPayGroups`) | [`0x5E02A090D6fbEADeF2cAb310Da64C222677A809a`](https://explorer.arc.io/address/0x5E02A090D6fbEADeF2cAb310Da64C222677A809a) (source verified on the explorer, per the owner) |
+| Mainnet deploy transaction | [`0xdb5807f12cff462ce71b09562f808a1f1f84c72c7fa70ba608de261a5d75bcab`](https://explorer.arc.io/tx/0xdb5807f12cff462ce71b09562f808a1f1f84c72c7fa70ba608de261a5d75bcab) |
+| Mainnet deploy block | 28666906 |
+| First real USDC payment transactions (0.25 USDC each, into the same group) | [`0x2271805f…2b0d`](https://explorer.arc.io/tx/0x2271805f7af74b98f79385dd5cb8703602cc28d485c37c73821e6eca8cbb2b0d) and [`0x20c05490…f8a6`](https://explorer.arc.io/tx/0x20c0549036ed7393c7b1c5603c9fd0b0fa1a6f28ce377d9b31e063fbad49f8a6) |
 | Explorer | https://explorer.arc.io |
+
+Read-only checks against three Arc mainnet endpoints: the deployed runtime code is identical to this repository's build of `contracts/SplitPayGroups.sol` (ignoring the compiler's metadata hash), `usdc()` is the official USDC `0x3600000000000000000000000000000000000000`, `MAX_NAME_BYTES()` is 24, and both payments emitted `ContributionReceived` from this contract and moved USDC straight to the group's recipient. No independent security audit is recorded in this repository (`docs/SECURITY_REVIEW.md` is an automated review).
 
 ### Arc Testnet (chain ID 5042002), what has been verified
 

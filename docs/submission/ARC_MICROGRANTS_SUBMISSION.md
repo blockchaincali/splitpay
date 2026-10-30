@@ -6,9 +6,9 @@ Prepared 28 October 2026. Items marked **[you]** can only be done by you. Items 
 
 The round's published rules (sources in section 9) require a project that is **built in Arc Studio, deployed to Arc mainnet, and has moved real USDC through its contract and app**. Testnet-only builds are listed as not eligible. The deadline is **1 November 2026**.
 
-SplitPay today is fully working and tested on **Arc Testnet only**. No mainnet contract exists and no real USDC has moved. Until you complete the mainnet steps in section 3, SplitPay does not meet the round's entry requirement, whatever the quality of the rest of the package.
+**Update, 30 October 2026: the gap is closed on-chain.** The owner deployed the unchanged contract to Arc mainnet (`0x5E02A090D6fbEADeF2cAb310Da64C222677A809a`, block 28666906) and two real payments of 0.25 USDC went through it into one group. I confirmed this read-only against the chain: the deployed code matches this repository's build, `usdc()` is the official USDC, and both payments emitted `ContributionReceived` from the contract (`docs/DEPLOYMENTS.md`). What remains is not code: the video, your builder profile, pushing the final branch to the public repository, and submitting the form before the cutoff. The matrix in section 2 shows each requirement's state.
 
-I cannot close this gap for you. Arc Studio does not deploy to, fund, sign for or transact on mainnet. Those steps are yours, from your own wallet, outside Arc Studio, and they involve real money and cannot be undone.
+(For the record: Arc Studio did not and cannot deploy to, fund, sign for or transact on mainnet. Those steps are yours, from your own wallet, outside Arc Studio, and they involve real money and cannot be undone.)
 
 You have three honest options:
 
@@ -27,19 +27,19 @@ You have three honest options:
 | # | Required by the round | State | Who | Where |
 |---|-----------------------|-------|-----|-------|
 | 1 | Built in Arc Studio | Ready. Project history and plan are preserved | you provide URL | Arc Studio project URL **[you]**; `docs/BUILD_HISTORY.md`, `arc-studio-plans/PLAN.md`, `AGENTS.md` |
-| 2 | Arc Studio project URL | **Missing** | you | Copy it from the browser address bar while the project is open; paste into `README.md` and the form |
-| 3 | Live app link | **Missing** (no public deployment yet) | you (Vercel) | `docs/RELEASE_CHECKLIST.md` section B |
-| 4 | Deployed to Arc mainnet | **Not done** | you | Section 3 |
-| 5 | Contract address(es) | Testnet only: `0xd7f9c3823e81fe27300693c060a6418ad3eed806`. Mainnet **missing** | you | Section 3 |
-| 6 | One example transaction hash (real USDC moved on mainnet) | **Missing** | you | Section 3 step 8 |
-| 7 | Public repository | **Missing** (code is ready and secret-free) | you (GitHub) | `docs/RELEASE_CHECKLIST.md` section A |
+| 2 | Arc Studio project URL | Ready | done | In `README.md`: https://studio.arc.io/app/b48c1672-5469-4cc3-9277-20e5e45cd5e8 |
+| 3 | Live app link | Ready, checked read-only | done | https://splitpay-sepia.vercel.app (`docs/DEPLOYMENTS.md`) |
+| 4 | Deployed to Arc mainnet | **Done** (30 Oct 2026) | done | `docs/DEPLOYMENTS.md` |
+| 5 | Contract address(es) | Mainnet `0x5E02A090D6fbEADeF2cAb310Da64C222677A809a`; testnet `0xd7f9c3823e81fe27300693c060a6418ad3eed806` | done | `docs/DEPLOYMENTS.md` |
+| 6 | One example transaction hash (real USDC moved on mainnet) | Ready: `0x2271805f7af74b98f79385dd5cb8703602cc28d485c37c73821e6eca8cbb2b0d` (and a second, `0x20c05490…f8a6`) | done | `docs/DEPLOYMENTS.md` |
+| 7 | Public repository | https://github.com/blockchaincali/splitpay exists. Push the final branch (`arc-studio-release-3`) so the submitted code includes the mainnet record | you (GitHub) | `docs/RELEASE_CHECKLIST.md` section A |
 | 8 | Video walkthrough | **Missing** | you | Section 5 gives the script |
 | 9 | Short description | Draft ready | you review | Section 4 |
 | 10 | Public builder profile (GitHub, X or Farcaster) | **[fill]** | you | Your profile URL |
-| 11 | Real USDC moving through app and contract | **Not done** | you | Section 3 |
-| 12 | Working product | Ready on testnet; verified | done | `docs/TEST_EVIDENCE.md` |
+| 11 | Real USDC moving through app and contract | **Done on-chain**: 2 payments of 0.25 USDC. That they came through the live app is your statement; the chain cannot show the front end | done | `docs/DEPLOYMENTS.md` |
+| 12 | Working product | Verified on testnet and on the live mainnet site | done | `docs/TEST_EVIDENCE.md`, `docs/DEPLOYMENTS.md` |
 
-Scoring weights as published: real USDC on mainnet 30%, use of Arc Studio across the build 25%, working product 25%, potential to go further 20%. Honest self-assessment today: the 30% is at zero until mainnet is done; the working-product and Arc Studio criteria are well supported by the evidence in this repository; the "go further" case is in `docs/GRANT_APPLICATION.md` and `docs/PRODUCTION_ARCHITECTURE.md`.
+Scoring weights as published: real USDC on mainnet 30%, use of Arc Studio across the build 25%, working product 25%, potential to go further 20%. Honest self-assessment today: the mainnet criterion now has on-chain evidence (a deployed contract and two real 0.25 USDC payments; breadth of use is still tiny); the working-product and Arc Studio criteria are well supported by the evidence in this repository; the "go further" case is in `docs/GRANT_APPLICATION.md` and `docs/PRODUCTION_ARCHITECTURE.md`.
 
 ## 3. Mainnet steps (yours alone)
 

@@ -61,7 +61,7 @@ Nothing in this pack is labelled "live in production". There is no production de
 | Circle user-controlled or passkey wallets | Not integrated | Circle Console configuration (App ID or client key tied to the deployed hostname) |
 | Real email delivery | Adapter for a transactional provider written, never run | Provider account and a verified sending domain |
 | Circle onramp | Not integrated | Console key; availability for Nigerian users unconfirmed |
-| Mainnet deployment | None | Owner's wallet, independent audit decision, explicit approval (see `docs/MAINNET_CHECKLIST.md`) |
+| Mainnet deployment | Done by the owner on 30 Oct 2026 (`docs/DEPLOYMENTS.md`); unchanged contract, runtime code matches this repository's tested build | Independent audit still outstanding |
 
 ### Future milestones
 
@@ -103,11 +103,11 @@ Design rules that are enforced in code and tests:
 | Browser, real app on Arc Testnet | 17 of 17 on two runs, plus a guest-payment run on the v1 release build and on `consumer-v2` | `docs/TEST_EVIDENCE.md`, `docs/ui-verification/` |
 | Lint, types, production build | Clean on both refs | `bun run check && bun run build` |
 
-Not tested: real email delivery, anything against Yellow Card or Circle services, load, third-party wallet pickers, mainnet.
+Not tested: real email delivery, anything against Yellow Card or Circle services, load, third-party wallet pickers, and mainnet beyond the read-only checks and two payments in `docs/DEPLOYMENTS.md`.
 
 ## 6. Current limitations
 
-1. **No mainnet deployment and no real USDC has moved.** All evidence is from Arc Testnet.
+1. **Mainnet history is short.** The unchanged contract went live on Arc mainnet on 30 October 2026 and has seen two real payments of 0.25 USDC into one group (`docs/DEPLOYMENTS.md`). There is no usage beyond that, no independent audit, and the mainnet app has had no load or real-user testing.
 2. **No independent audit.** The review was automated and tool-assisted. The contract holds no funds and has no admin, which limits impact, but it is not a substitute for an audit.
 3. **NGN is a demonstration only.** No conversion, withdrawal or bank transfer exists. The demo rate is not a market rate.
 4. **A live NGN to Arc USDC path is a custody question.** It needs legal advice and a licensed partner before release (`docs/PRODUCTION_ARCHITECTURE.md` section 6).
@@ -128,7 +128,7 @@ Proposed, not committed; durations depend on third parties. Each has acceptance 
 | # | Milestone | Needs from others | Acceptance criteria | Proposed time |
 |---|-----------|-------------------|---------------------|---------------|
 | M0-M4 | v1 freeze, accounts, testnet wallet, invites, sandbox payments | none | **Done** (section 3) | Done |
-| M5 | Mainnet pilot of the unchanged contract | Owner's wallet and funds, audit decision | Deployed address, verified source, one supervised small USDC group, transaction hashes published | Owner-led, days |
+| M5 | Mainnet pilot of the unchanged contract (deployment and first two payments done; supervised pilot with more users remains) | Owner's wallet and funds, audit decision | Deployed address, verified source, one supervised small USDC group, transaction hashes published | Owner-led, days |
 | M6 | Real email and hosted beta | Mail provider, hosting | Domain authenticated, bounce handling, Postgres, shared rate limits, public testnet beta | 2 to 3 weeks |
 | M7 | Circle wallet pilot | Circle Console config | A new user creates a wallet and pays on testnet without an extension; token handling reviewed | 2 to 3 weeks |
 | M8 | Event indexer and scheduled reminders | Hosting | Restart-safe indexer, nightly consistency job green, reminders on a schedule with unsubscribe | 2 to 3 weeks |
@@ -152,7 +152,9 @@ Six real transactions (`docs/measured-gas-arc-testnet.json`). Fees on Arc are pa
 | First payment by a wallet | 138,518 | about 0.0032 USDC |
 | Later payment by a wallet | 78,796 | about 0.0018 USDC |
 
-A group with N payers costs about `0.0032 + N x 0.0045` USDC in network fees at that price (about 0.021 USDC for four). One day's testnet observation; mainnet must be measured before pricing anything.
+A group with N payers costs about `0.0032 + N x 0.0045` USDC in network fees at that price (about 0.021 USDC for four). One day's testnet observation.
+
+Measured on Arc mainnet, 30 October 2026 (`docs/DEPLOYMENTS.md`, effective gas price about 21.5 gwei): deploying the contract cost about 0.0149 USDC (691,687 gas); two payments cost about 0.0023 USDC (113,434 gas) and 0.0020 USDC (96,346 gas). These are three data points on one day, not a fee schedule; re-measure before pricing anything.
 
 ### Needs a quote
 
